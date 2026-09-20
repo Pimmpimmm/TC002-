@@ -69,6 +69,19 @@ bool parsePort(const std::string& value, uint16_t& port) {
 	return true;
 }
 
+bool parseSeconds(const std::string& value, int64_t& seconds) {
+	if (value.empty()) return false;
+	int64_t parsed = 0;
+	for (char digit : value) {
+		if (digit < '0' || digit > '9') return false;
+		parsed = parsed * 10 + static_cast<int64_t>(digit - '0');
+		if (parsed > 14400) return false;
+	}
+	if (parsed < 60) return false;
+	seconds = parsed;
+	return true;
+}
+
 bool validIpv4(const std::string& host) {
 	in_addr address = {};
 	return inet_pton(AF_INET, host.c_str(), &address) == 1;
@@ -76,8 +89,14 @@ bool validIpv4(const std::string& host) {
 
 } // namespace
 
-MqttPublisher::BrokerConfig MqttPublisher::loadConfig() const {
-	BrokerConfig config = {focus_config::kBrokerHost, focus_config::kBrokerPort, focus_config::kEventTopic};
+MqttPublisher::RuntimeConfig MqttPublisher::loadConfig() const {
+	RuntimeConfig config = {
+		focus_config::kBrokerHost,
+		focus_config::kBrokerPort,
+		focus_config::kEventTopic,
+		focus_config::kFocusSeconds,
+		focus_config::kRestSeconds
+	};
 	const char* paths[] = {
 		"/mnt/extsd/focus-app/device.conf",
 		"/tmp/ui/device.conf"
@@ -98,13 +117,20 @@ MqttPublisher::BrokerConfig MqttPublisher::loadConfig() const {
 				uint16_t port = 0;
 				if (parsePort(value, port)) config.port = port;
 			} else if (key == "event_topic" && validTopic(value)) config.topic = value;
+			else if (key == "focus_seconds") {
+				int64_t seconds = 0;
+				if (parseSeconds(value, seconds)) config.focusSeconds = seconds;
+			} else if (key == "rest_seconds") {
+				int64_t seconds = 0;
+				if (parseSeconds(value, seconds)) config.restSeconds = seconds;
+			}
 		}
 		break;
 	}
 	return config;
 }
 
-int MqttPublisher::connectBroker(const BrokerConfig& config) const {
+int MqttPublisher::connectBroker(const RuntimeConfig& config) const {
 	int fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (fd < 0) return -1;
 
@@ -190,7 +216,7 @@ bool MqttPublisher::sendPublish(int fd, const std::string& topic, const std::str
 }
 
 bool MqttPublisher::publish(const std::string& payload) const {
-	const BrokerConfig config = loadConfig();
+	const RuntimeConfig config = loadConfig();
 	int fd = connectBroker(config);
 	if (fd < 0) {
 		LOGW_TRACE("FocusProbe: MQTT broker unavailable");
