@@ -68,7 +68,9 @@ export function buildCalendarPlan({
         start_time: { timestamp: String(now), timezone },
         end_time: { timestamp: String(bookedEnd), timezone },
         vchat: { vc_type: 'no_meeting' },
-        visibility: 'private',
+        // Public event visibility lets colleagues see the Busy status in the
+        // user's calendar instead of keeping the event private to its owner.
+        visibility: 'public',
         attendee_ability: 'none',
         free_busy_status: 'busy',
         reminders: []
