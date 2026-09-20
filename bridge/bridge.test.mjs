@@ -155,7 +155,7 @@ test('signed HTTP round trip books Busy for exactly the focus window and deletes
   assert.equal(created[0].authorized, true);
   assert.equal(created[0].has_idempotency_key, true);
   assert.equal(created[0].free_busy_status, 'busy');
-  assert.equal(created[0].visibility, 'private');
+  assert.equal(created[0].visibility, 'public');
   assert.equal(created[0].start_timestamp, String(T0));
   assert.equal(created[0].end_timestamp, String(DEADLINE));
   assert.equal(bridge.getStore().sessions['sess-http-0001'].event_id, 'evt_fake_1');
