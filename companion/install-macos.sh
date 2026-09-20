@@ -88,7 +88,7 @@ case "$MODE" in
 esac
 
 cat <<PLAN
-计划（apply=$APPLY）
+计划（apply=${APPLY}）
   EMQX home        $EMQX_HOME
   EMQX binary      $EMQX_HOME/bin/emqx
   LAN listener     $LAN_HOST:$PORT
