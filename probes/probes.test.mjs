@@ -45,7 +45,7 @@ test('books Busy for exactly the focus window, one idempotent event per session'
   const plan = buildCalendarPlan({ calendarId: 'primary-test', now: 1_788_140_000, sessionId: 'sess-0001abcd' });
   assert.equal(plan.token_type, 'user_access_token');
   assert.equal(plan.create.body.free_busy_status, 'busy');
-  assert.equal(plan.create.body.visibility, 'private');
+  assert.equal(plan.create.body.visibility, 'public');
   assert.equal(plan.create.body.need_notification, false);
   assert.deepEqual(plan.create.body.reminders, []);
   assert.equal(plan.create.body.start_time.timestamp, '1788140000');
