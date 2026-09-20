@@ -4,6 +4,8 @@
 **授权状态：用户已明确授权修改 TC002 设备软件（"这 clock 随便改"）。**
 **Lark 租户：国际版，API base = `https://open.larksuite.com`（用户提供的 open.feishu.cn 文档内容等价，仅域名不同）。**
 
+> 2026-09-20 实施更新：Lark 创建的专注日程改为 `visibility=public`，让共享日历中的同事可见；专注/休息时长不再只能写死在固件里，而是由助手通过 `device.conf` 配置（默认 2700/300 秒）。
+
 > 2026-09-18 设备交互更新（覆盖下文旧的“中键退出到 IDLE / 到期等待确认”规则）：首次中键从 `READY` 进入 `FOCUS`；`FOCUS` 中键提前进入 `REST` 并沿用原 `stop` 事件；`REST` 中键提前进入下一轮 `FOCUS` 并沿用原 `start` 事件。倒计时自然结束也自动进入下一阶段。旋钮仍退出循环回到 `READY`。Lark 日历 API 与 45 分钟忙碌生命周期不变。
 
 > 2026-09-18 声音更新：仅 `FOCUS` 自然到期时播放一次 `/tmp/ui/audio/focus_done.wav`；提前按中键、旋钮退出均不播放。进入下一轮专注或退出循环时停止尚未播完的音频。右侧硬件键用于试听，左侧硬件键用于停止试听；试听不发送 MQTT、不改变 Lark。
@@ -105,7 +107,7 @@ REST_ALARM （持续响铃 + "休息结束"；Lark 无日程）
 | 延长日程（仅响铃未确认时） | PATCH | `/open-apis/calendar/v4/calendars/{calendar_id}/events/{event_id}` | `user_access_token` |
 | 删除日程 | DELETE | `/open-apis/calendar/v4/calendars/{calendar_id}/events/{event_id}?need_notification=false` | `user_access_token` |
 
-创建 body 固定为：`summary=专注`、`visibility=private`、`free_busy_status=busy`、`attendee_ability=none`、`vchat.vc_type=no_meeting`、`need_notification=false`、`reminders=[]`、`start_time/end_time` 为 epoch 秒字符串 + IANA 时区。
+创建 body 固定为：`summary=专注`、`visibility=public`、`free_busy_status=busy`、`attendee_ability=none`、`vchat.vc_type=no_meeting`、`need_notification=false`、`reminders=[]`、`start_time/end_time` 为 epoch 秒字符串 + IANA 时区。
 
 最小用户 scope：`calendar:calendar:read`、`calendar:calendar.event:create`、`calendar:calendar.event:delete`。
 
