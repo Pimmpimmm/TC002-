@@ -3,7 +3,7 @@
 如果要给每个人安装一套本机 EMQX 和后台助手，请优先看
 `../companion/README.md`。本文件保留 bridge 的协议和单独调试说明。
 
-权威需求与状态机见 `../research/SPEC-V2-45-5.md`。桥接只做三件事：**验证来源、每个 `session_id` 只维护一条 Lark 日程、过了 45 分钟边界就再也不碰 Lark**。它不决定任何时间——开始与结束都由时钟设备说了算。
+权威需求与状态机见 `../research/SPEC-V2-45-5.md`。桥接只做三件事：**验证来源、每个 `session_id` 只维护一条公开可见的 Lark 日程、过了专注边界就再也不碰 Lark**。它不决定任何时间——开始与结束都由时钟设备说了算。
 
 ## 快速自测（不碰网络、不碰 Lark）
 
@@ -89,6 +89,7 @@ plist 里不写任何密钥；状态在 `~/Library/Application Support/tc002-foc
 
 - 同一 `session_id` 重复 `start` → 不新建、不延长 deadline
 - 提前退出（中键或旋钮）→ DELETE 那条日程；失败则指数退避重试到 45 分钟边界为止
+- 创建日程使用 `visibility=public`，因此同事能在共享权限允许的前提下看到“专注”时段
 - **到了 `focus_deadline` 之后：对 Lark 零调用**，日程靠 `end_time` 自行解除
 - Lark 离线时 `start` 后马上 `stop` → 队列里的 create 被抵消，一个请求都不发
 - 心跳报非 FOCUS 状态 → 对账删除；重启只恢复绝对 deadline，绝不重算 45 分钟
