@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.tc002.focus-bridge</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__NODE__</string>
+    <string>__REPO__/bridge/server.mjs</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__REPO__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>BRIDGE_LARK_MODE</key>
+    <string>__MODE__</string>
+    <key>BRIDGE_HOST</key>
+    <string>__HOST__</string>
+    <key>BRIDGE_PORT</key>
+    <string>__PORT__</string>
+    <key>FOCUS_SECONDS</key>
+    <string>__FOCUS_SECONDS__</string>
+    <key>BRIDGE_STATE_FILE</key>
+    <string>__STATE_FILE__</string>
+    <key>BRIDGE_ACK_REAL_LARK</key>
+    <string>__ACK_VALUE__</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>__LOG_DIR__/bridge.log</string>
+  <key>StandardErrorPath</key>
+  <string>__LOG_DIR__/bridge.err.log</string>
+</dict>
+</plist>

@@ -1,0 +1,182 @@
+# Ulanzi Focus Companion（macOS 第一版）
+
+这个目录是每个人电脑上的助手软件安装层。它把三项后台服务一起管理：
+
+1. 本机 EMQX：接收同一局域网内 TC002 发来的 MQTT 事件；
+2. Focus bridge：按当前电脑用户的 Lark OAuth 凭据维护日历忙碌状态；
+3. MQTT adapter：只订阅配置的精确主题，把事件转交给本机 bridge。
+
+Lark 的 access token、refresh token、App Secret 和共享密钥仍然只写入
+macOS 钥匙串，不写入 plist、配置文件或设备。
+
+## 推荐的 EMQX 版本
+
+推荐每台 Mac 使用 Homebrew 安装 EMQX：
+
+```bash
+brew update
+brew install emqx
+"$(brew --prefix emqx)/bin/emqx" foreground
+```
+
+看到 EMQX 进入运行状态后按 `Ctrl+C` 停止。后面由助手的 LaunchAgent
+负责自动启动它。
+
+Homebrew 当前提供 macOS Apple Silicon 和 Intel 的 EMQX 安装包。这个项目
+只使用 MQTT 基础能力，不需要 Enterprise 专属功能。EMQX 官方 macOS 安装
+说明见：
+
+- <https://docs.emqx.com/en/emqx/latest/get-started/deploy/install-macOS.html>
+- <https://formulae.brew.sh/formula/emqx>
+
+截至 2026-09，Homebrew 公式显示 EMQX 5.8.8，并标记将在 2026-11-30
+停止维护。这个版本可用于当前的小规模内网部署；正式长期使用前需要确认
+是否升级到 EMQX 官方仍维护的版本。
+
+不要把 Linux 的 `emqx-*-amzn2023-amd64` 压缩包上传给 Mac 用户使用。
+
+## 安装前提
+
+- macOS；
+- Node.js 24 或更高版本；
+- Homebrew 安装好的 EMQX，或者一份适用于 macOS 的 EMQX 解压目录；
+- 电脑和 TC002 在同一个局域网；
+- 电脑的局域网 IP 最好在路由器中做 DHCP 保留。
+
+## 从零安装流程
+
+以下步骤每个人的 Mac 都执行一次。
+
+### 第 1 步：准备项目和 Node.js
+
+```bash
+git clone <你的 GitHub 仓库地址>
+cd 时钟
+npm install
+```
+
+如果电脑没有 Node.js 24 或更高版本，可以使用 Homebrew：
+
+```bash
+brew install node
+```
+
+### 第 2 步：安装本机 EMQX
+
+```bash
+brew install emqx
+```
+
+确认路径：
+
+```bash
+brew --prefix emqx
+```
+
+### 第 3 步：准备 Lark 授权
+
+先完成 Lark OAuth（每个人在自己的电脑上做一次）：
+
+```bash
+bash bridge/setup-lark-oauth.sh
+```
+
+脚本会要求输入 Lark App ID 和 App Secret，并在浏览器打开授权页面。
+Token 只会写入本机 macOS 钥匙串。
+
+### 第 4 步：先预演助手安装
+
+把示例中的 `192.0.2.100` 换成这台 Mac 在局域网中的地址。建议在路由器中给它
+做 DHCP 保留，避免地址变化。
+
+```bash
+bash companion/install-macos.sh \
+  --lan-host 192.0.2.100 \
+  --mode real \
+  --calendar-id <本人的主日历ID>
+```
+
+如果没有使用 Homebrew，而是手动解压了 EMQX，再补上：
+
+```bash
+--emqx-home /path/to/emqx
+```
+
+### 第 5 步：正式安装助手
+
+确认预演内容正确后，加 `--apply`：
+
+```bash
+bash companion/install-macos.sh \
+  --lan-host 192.0.2.100 \
+  --mode real \
+  --calendar-id <本人的主日历ID> \
+  --apply
+```
+
+安装后会创建并加载三个 LaunchAgent：
+
+```text
+com.tc002.focus-emqx
+com.tc002.focus-bridge
+com.tc002.focus-mqtt
+```
+
+三者都设置为登录后启动、异常退出自动重启。EMQX 在电脑局域网地址的
+`1883` 端口接收时钟，在 `127.0.0.1:1884` 提供给本机 MQTT adapter；
+bridge 和 Lark 不对局域网开放。
+
+### 第 6 步：给时钟配对这台电脑
+
+先确认时钟开启了 Wi-Fi ADB，再执行：
+
+```bash
+npm run companion:configure-device -- \
+  --adb-target 192.0.2.131:5555 \
+  --lan-host 192.0.2.100
+```
+
+其中 `--adb-target` 是时钟的地址，`--lan-host` 是电脑的地址。这个动作
+只写入 `/mnt/extsd/focus-app/device.conf`，不改 `/res`，不制作或刷入
+`update.img`。如果当前只是临时运行在 `/tmp/ui`，加上：
+
+```bash
+--remote-dir /tmp/ui
+```
+
+### 第 7 步：验证
+
+1. 在电脑上确认三个 LaunchAgent 已加载；
+2. 重启电脑，确认 EMQX 和助手自动起来；
+3. 在时钟上按中键进入 Focus；
+4. 检查本人的 Lark 是否出现 45 分钟忙碌日程；
+5. 提前退出，检查日程是否被删除；
+6. 关闭电脑，确认时钟仍能本地倒计时和播放声音。
+
+查看日志：
+
+```bash
+tail -f "$HOME/Library/Logs/tc002-focus-companion/emqx.log"
+tail -f "$HOME/Library/Logs/tc002-focus-bridge/bridge.log"
+tail -f "$HOME/Library/Logs/tc002-focus-bridge/mqtt.log"
+```
+
+## 当前边界和恢复
+
+第一版仍沿用设备当前的固定 MQTT 主题。因为每个人运行的是独立的本机
+EMQX，所以不同电脑之间不会串消息。以后同一台电脑要挂多台时钟时，再把
+设备序列号加入 topic 和配对界面。
+
+电脑关机时，时钟自己的倒计时和声音不受影响；只是 Lark 同步会等电脑和
+助手重新上线后恢复。
+
+如果要暂时停掉电脑助手：
+
+```bash
+launchctl unload "$HOME/Library/LaunchAgents/com.tc002.focus-emqx.plist"
+launchctl unload "$HOME/Library/LaunchAgents/com.tc002.focus-bridge.plist"
+launchctl unload "$HOME/Library/LaunchAgents/com.tc002.focus-mqtt.plist"
+```
+
+这不会刷写或删除时钟固件。当前方案的设备自动启动入口仍需要单独验证，
+不要把 `update.img` 当成日常安装步骤。

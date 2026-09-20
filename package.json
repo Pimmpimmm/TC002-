@@ -1,0 +1,36 @@
+{
+  "name": "tc002-lark-feasibility-probes",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test probes/*.test.mjs bridge/*.test.mjs",
+    "probe:discover": "node probes/tc002-discover.mjs",
+    "probe:broker:install": "node probes/install-broker-runtime.mjs",
+    "probe:broker": "node probes/tc002-broker.mjs",
+    "probe:broker:self-test": "node probes/broker-self-test.mjs",
+    "probe:tc002:http": "node probes/tc002-http-state.mjs",
+    "probe:capture": "node probes/tc002-capture.mjs",
+    "probe:notify": "node probes/tc002-notify.mjs",
+    "probe:lark": "node probes/lark-status-dry-run.mjs",
+    "probe:lark:calendar": "node probes/lark-calendar-dry-run.mjs",
+    "probe:secrets": "node probes/secret-scan.mjs",
+    "probe:ulanzi:audit": "node probes/ulanzi-source-audit.mjs",
+    "probe:studio:audit": "node probes/studio-config-audit.mjs",
+    "probe:mac:build": "xcrun clang -fobjc-arc -framework Foundation -framework UserNotifications -framework ApplicationServices probes/mac-notification-boundary.m -o /tmp/mac-notification-boundary",
+    "probe:mac": "/tmp/mac-notification-boundary public",
+    "bridge": "node bridge/server.mjs",
+    "bridge:mqtt": "node bridge/mqtt-adapter.mjs",
+    "bridge:oauth": "node bridge/oauth.mjs",
+    "bridge:calendar": "node bridge/setup-calendar.mjs",
+    "bridge:fake-lark": "node bridge/fake-lark.mjs",
+    "companion:install": "bash companion/install-macos.sh",
+    "companion:configure-device": "bash companion/configure-device.sh"
+  },
+  "devDependencies": {
+    "aedes": "1.1.2"
+  }
+}

@@ -1,0 +1,47 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+const WIDTH = 52;
+const HEIGHT = 16;
+const SCALE = 12;
+const DIGITS = [
+  [0x1f,0x1f,0x1b,0x1b,0x1b,0x1b,0x1b,0x1b,0x1f,0x1f],
+  [0x06,0x0e,0x1e,0x06,0x06,0x06,0x06,0x06,0x1f,0x1f],
+  [0x1f,0x1f,0x03,0x03,0x1f,0x1f,0x18,0x18,0x1f,0x1f],
+  [0x1f,0x1f,0x03,0x03,0x1f,0x1f,0x03,0x03,0x1f,0x1f],
+  [0x1b,0x1b,0x1b,0x1b,0x1f,0x1f,0x03,0x03,0x03,0x03],
+  [0x1f,0x1f,0x18,0x18,0x1f,0x1f,0x03,0x03,0x1f,0x1f],
+  [0x1f,0x1f,0x18,0x18,0x1f,0x1f,0x1b,0x1b,0x1f,0x1f],
+  [0x1f,0x1f,0x03,0x03,0x03,0x03,0x03,0x03,0x03,0x03],
+  [0x1f,0x1f,0x1b,0x1b,0x1f,0x1f,0x1b,0x1b,0x1f,0x1f],
+  [0x1f,0x1f,0x1b,0x1b,0x1f,0x1f,0x03,0x03,0x1f,0x1f]
+];
+
+const pixels = Array.from({ length: HEIGHT }, () => Array.from({ length: WIDTH }, () => [0, 0, 0]));
+const white = [255, 255, 255];
+const set = (x, y) => { if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) pixels[y][x] = white; };
+const digit = (x, value) => {
+  for (let row = 0; row < 10; row += 1) for (let column = 0; column < 5; column += 1) {
+    if (DIGITS[value][row] & (1 << (4 - column))) set(x + column, 3 + row);
+  }
+};
+const colon = x => {
+  for (let column = 0; column < 2; column += 1) for (const row of [5, 6, 9, 10]) set(x + column, row);
+};
+
+for (const [x, value] of [[4,1],[10,3],[21,4],[27,7],[38,5],[44,9]]) digit(x, value);
+colon(17);
+colon(34);
+
+const width = WIDTH * SCALE;
+const height = HEIGHT * SCALE;
+const body = Buffer.alloc(width * height * 3);
+let offset = 0;
+for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+  const color = pixels[Math.floor(y / SCALE)][Math.floor(x / SCALE)];
+  body[offset++] = color[0]; body[offset++] = color[1]; body[offset++] = color[2];
+}
+const output = path.resolve('device/TC002_Focus_Probe/previews/world-time.ppm');
+fs.mkdirSync(path.dirname(output), { recursive: true });
+fs.writeFileSync(output, Buffer.concat([Buffer.from(`P6\n${width} ${height}\n255\n`), body]));
+console.log(output);

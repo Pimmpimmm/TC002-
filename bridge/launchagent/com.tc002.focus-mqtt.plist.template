@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.tc002.focus-mqtt</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__NODE__</string>
+    <string>__REPO__/bridge/mqtt-adapter.mjs</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__REPO__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>MQTT_BROKER</key>
+    <string>__MQTT_BROKER__</string>
+    <key>MQTT_EVENT_TOPIC</key>
+    <string>__MQTT_TOPIC__</string>
+    <key>BRIDGE_URL</key>
+    <string>http://127.0.0.1:8787/focus</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+  <key>StandardOutPath</key>
+  <string>__LOG_DIR__/mqtt.log</string>
+  <key>StandardErrorPath</key>
+  <string>__LOG_DIR__/mqtt.err.log</string>
+</dict>
+</plist>

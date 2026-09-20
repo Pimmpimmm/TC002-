@@ -1,0 +1,13 @@
+.DS_Store
+Claude outputs/
+probes/.runtime/
+node_modules/
+
+# Local secrets, device captures and generated firmware/build outputs.
+support/
+device/TC002_Focus_Probe/Backup/
+device/TC002_Focus_Probe/Recovery/
+device/TC002_Focus_Probe/PersistentRelease/
+device/TC002_Focus_Probe/Temporary*
+device/TC002_Focus_Probe/ManualRelease/
+device/TC002_Focus_Probe/*.img
