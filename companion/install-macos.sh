@@ -11,6 +11,7 @@ PORT="1883"
 LOCAL_PORT="1884"
 TOPIC="ulanzi/tc002-focus/events/focus"
 FOCUS_SECONDS="2700"
+REST_SECONDS="300"
 CALENDAR_ID=""
 APPLY=0
 
@@ -26,6 +27,7 @@ usage() {
   --calendar-id <id>      real 模式下本人的 Lark 主日历 ID
   --mqtt-topic <topic>    设备事件精确主题
   --focus-seconds <n>     专注时长（默认 2700）
+  --rest-seconds <n>      休息时长（默认 300）
   --apply                 真正写入 LaunchAgent 并加载（默认只预演）
   -h, --help              显示帮助
 
@@ -43,6 +45,7 @@ while [ $# -gt 0 ]; do
     --calendar-id) CALENDAR_ID="${2:-}"; shift 2 ;;
     --mqtt-topic) TOPIC="${2:-}"; shift 2 ;;
     --focus-seconds) FOCUS_SECONDS="${2:-}"; shift 2 ;;
+    --rest-seconds) REST_SECONDS="${2:-}"; shift 2 ;;
     --apply) APPLY=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) alarm "未知参数: $1" ;;
@@ -65,6 +68,9 @@ case "$MODE" in dry|fake|real) ;; *) alarm "--mode 只能是 dry、fake 或 real
 case "$LAN_HOST" in *[!0-9.]*) alarm "--lan-host 必须是 IPv4 地址" ;; esac
 case "$PORT" in ''|*[!0-9]*) alarm "内部 MQTT 端口无效" ;; esac
 case "$FOCUS_SECONDS" in ''|*[!0-9]*) alarm "--focus-seconds 必须是数字" ;; esac
+case "$REST_SECONDS" in ''|*[!0-9]*) alarm "--rest-seconds 必须是数字" ;; esac
+[ "$FOCUS_SECONDS" -ge 60 ] && [ "$FOCUS_SECONDS" -le 14400 ] || alarm "--focus-seconds 必须在 60..14400 秒"
+[ "$REST_SECONDS" -ge 60 ] && [ "$REST_SECONDS" -le 14400 ] || alarm "--rest-seconds 必须在 60..14400 秒"
 case "$TOPIC" in *'#'*|*'+'*|''|*[!A-Za-z0-9_./-]*) alarm "--mqtt-topic 必须是固定 MQTT 主题" ;; esac
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -90,6 +96,7 @@ cat <<PLAN
   MQTT topic       $TOPIC
   bridge mode      $MODE
   focus seconds    $FOCUS_SECONDS
+  rest seconds     $REST_SECONDS
   support dir     $SUPPORT_DIR
   log dir          $LOG_DIR
   EMQX LaunchAgent $EMQX_PLIST
@@ -145,3 +152,4 @@ BRIDGE_ARGS=(
 echo "本机 EMQX、bridge 和 MQTT adapter 已安装并加载。"
 echo "日志目录：$LOG_DIR 以及 ~/Library/Logs/tc002-focus-bridge"
 echo "时钟应连接到：$LAN_HOST:$PORT"
+echo "提醒：要让时钟本身采用这两个时长，请再运行 configure-device.sh 并传入相同的 --focus-seconds / --rest-seconds。"
