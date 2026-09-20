@@ -5,17 +5,21 @@
 
 class MqttPublisher {
 public:
-	bool publish(const std::string& payload) const;
-
-private:
-	struct BrokerConfig {
+	struct RuntimeConfig {
 		std::string host;
 		uint16_t port;
 		std::string topic;
+		int64_t focusSeconds;
+		int64_t restSeconds;
 	};
 
-	BrokerConfig loadConfig() const;
-	int connectBroker(const BrokerConfig& config) const;
+	bool publish(const std::string& payload) const;
+	// Reads the non-secret runtime configuration from device.conf. Invalid or
+	// missing timer values safely fall back to the compiled defaults.
+	RuntimeConfig loadConfig() const;
+
+private:
+	int connectBroker(const RuntimeConfig& config) const;
 	bool sendConnect(int fd) const;
 	bool sendPublish(int fd, const std::string& topic, const std::string& payload) const;
 };
