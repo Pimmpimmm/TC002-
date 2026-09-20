@@ -2,6 +2,8 @@
 
 > **Superseded implementation timing (2026-09-11):** the active target is 45 minutes focus + 10 minutes rest (`2700/600` seconds). This document preserves the earlier `+1800` probe/evidence. The current handoff is [`HANDOFF.md`](HANDOFF.md).
 
+> **Visibility update (2026-09-20):** the shipped bridge now creates `visibility=public` events. The private examples below are historical probe records, not the current deployment contract.
+
 ## Decision
 
 **Overall: the Lark Calendar half is conditionally feasible, but the requested end-to-end interaction is not implementable on tested stock TC002 firmware `1.1.1`.** The valid real-device capture now proves the current public/proven MQTT and read-only HTTP surfaces do not expose native BUSY entry/exit. The design remains dormant unless Ulanzi supplies an official state contract or changed stock firmware; the public Ulanzi Studio SDK does not provide that signal.
