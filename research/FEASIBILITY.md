@@ -2,7 +2,9 @@
 
 > **Current handoff override (2026-09-11):** the implementation target is now 45 minutes focus + 10 minutes rest (`2700/600` seconds). The `+1800` values below are historical evidence from the previous requirement; use [`HANDOFF.md`](HANDOFF.md) as the active implementation brief.
 
-> **Current narrowed decision (2026-09-01):** the active MVP is stock TC002 focus start → private Lark Calendar Busy event → deadline cleanup → next focus creates a new event. Its only recommended architecture and updated Ulanzi/Lark evidence are in [`BUSY-CALENDAR-MVP.md`](BUSY-CALENDAR-MVP.md). The five decisions below preserve the completed broader BUSY/status/message study; its direct tenant status path is superseded for the current MVP by user-OAuth calendar events.
+> **Current narrowed decision (2026-09-20):** the active MVP is TC002 focus start → public Lark Calendar Busy event → deadline cleanup → next focus creates a new event. Its only recommended architecture and updated Ulanzi/Lark evidence are in [`BUSY-CALENDAR-MVP.md`](BUSY-CALENDAR-MVP.md). The five decisions below preserve the completed broader BUSY/status/message study; its direct tenant status path is superseded for the current MVP by user-OAuth calendar events.
+
+> Older paragraphs in this research folder may say “private” because they record an earlier probe contract. The shipped implementation and current README use `visibility=public`.
 >
 > **Observed numeric mismatch:** secret-safe Studio data records native BUSY as `45+5`, while the confirmed Lark deadline is `+30`. The five decisions keep `+30` as an independent hard rule; they do not claim it matches the device's current rest boundary.
 
