@@ -2,27 +2,18 @@
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 
-/**
- * Loopback stand-in for Lark Calendar v4 used by S5 fault tests. It asserts the
- * request shape the real API needs and records metadata only — never a token value.
- */
-export function createFakeLark({ failCreateTimes = 0, failDeleteTimes = 0 } = {}) {
+/** Loopback stand-in for the Lark Personal Settings API used by fault tests. */
+export function createFakeLark({ failOpenTimes = 0, failCloseTimes = 0 } = {}) {
   const requests = [];
-  let createFailures = failCreateTimes;
-  let deleteFailures = failDeleteTimes;
-  let sequence = 0;
+  let openFailures = failOpenTimes;
+  let closeFailures = failCloseTimes;
 
   const server = createServer((request, response) => {
     let body = '';
     request.on('data', chunk => { body += chunk; });
     request.on('end', () => {
       const authorized = /^Bearer .+/.test(request.headers.authorization || '');
-      const record = {
-        method: request.method,
-        path: request.url.split('?')[0],
-        has_idempotency_key: request.url.includes('idempotency_key='),
-        authorized
-      };
+      const record = { method: request.method, path: request.url.split('?')[0], authorized };
       const send = (status, payload) => {
         record.status = status;
         requests.push(record);
@@ -30,22 +21,18 @@ export function createFakeLark({ failCreateTimes = 0, failDeleteTimes = 0 } = {}
         response.end(JSON.stringify(payload));
       };
       if (!authorized) return send(401, { code: 99991663, msg: 'missing token' });
-      if (request.method === 'POST' && record.path.endsWith('/events')) {
+      if (request.method === 'POST' && record.path.endsWith('/batch_open')) {
         const parsed = JSON.parse(body || '{}');
-        record.free_busy_status = parsed.free_busy_status;
-        record.visibility = parsed.visibility;
-        record.start_timestamp = parsed.start_time?.timestamp;
-        record.end_timestamp = parsed.end_time?.timestamp;
-        if (createFailures > 0) { createFailures -= 1; return send(503, { code: 1, msg: 'fake outage' }); }
-        sequence += 1;
-        return send(200, { code: 0, data: { event: { event_id: `evt_fake_${sequence}` } } });
+        record.user_id = parsed.user_list?.[0]?.user_id;
+        record.end_time = parsed.user_list?.[0]?.end_time;
+        if (openFailures > 0) { openFailures -= 1; return send(503, { code: 1, msg: 'fake outage' }); }
+        return send(200, { code: 0, data: { result_list: [{ user_id: record.user_id, result: 'success_show' }] } });
       }
-      if (request.method === 'DELETE' && record.path.includes('/events/')) {
-        if (deleteFailures > 0) { deleteFailures -= 1; return send(503, { code: 1, msg: 'fake outage' }); }
-        return send(200, { code: 0 });
-      }
-      if (request.method === 'POST' && record.path.endsWith('/calendars/primary')) {
-        return send(200, { code: 0, data: { calendar: { calendar_id: 'primary-fake' } } });
+      if (request.method === 'POST' && record.path.endsWith('/batch_close')) {
+        const parsed = JSON.parse(body || '{}');
+        record.user_id = parsed.user_list?.[0];
+        if (closeFailures > 0) { closeFailures -= 1; return send(503, { code: 1, msg: 'fake outage' }); }
+        return send(200, { code: 0, data: { result_list: [{ user_id: record.user_id, result: 'success' }] } });
       }
       return send(404, { code: 1, msg: 'unexpected route' });
     });
@@ -60,9 +47,7 @@ export function createFakeLark({ failCreateTimes = 0, failDeleteTimes = 0 } = {}
       });
       return `http://127.0.0.1:${server.address().port}`;
     },
-    async close() {
-      await new Promise(resolve => server.close(resolve));
-    }
+    async close() { await new Promise(resolve => server.close(resolve)); }
   };
 }
 

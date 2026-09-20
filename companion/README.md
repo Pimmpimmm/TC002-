@@ -17,12 +17,10 @@
 这个目录是每个人电脑上的助手软件安装层。它把三项后台服务一起管理：
 
 1. 本机 EMQX：接收同一局域网内 TC002 发来的 MQTT 事件；
-2. Focus bridge：按当前电脑用户的 Lark OAuth 凭据维护日历忙碌状态；
+2. Focus bridge：使用 Lark 租户 Token 开启/关闭当前用户的“专注中”系统状态；
 3. MQTT adapter：只订阅配置的精确主题，把事件转交给本机 bridge。
 
-Lark 忙碌日程按公开可见方式创建（`visibility=public`）。是否能被某位同事
-看到，仍取决于该 Lark 日历本身的共享权限；日程标题“专注”和起止时间会随
-公开日程显示。
+Lark 不再创建日历日程；“专注中”由 Personal Settings API 直接设置，并通过 `end_time` 自动到期。
 
 Lark 的 access token、refresh token、App Secret 和共享密钥仍然只写入
 macOS 钥匙串，不写入 plist、配置文件或设备。
@@ -112,7 +110,6 @@ Token 只会写入本机 macOS 钥匙串。
 bash companion/install-macos.sh \
   --lan-host 192.0.2.100 \
   --mode real \
-  --calendar-id <本人的主日历ID> \
   --focus-seconds 2700 \
   --rest-seconds 300
 ```
@@ -131,7 +128,6 @@ bash companion/install-macos.sh \
 bash companion/install-macos.sh \
   --lan-host 192.0.2.100 \
   --mode real \
-  --calendar-id <本人的主日历ID> \
   --focus-seconds 2700 \
   --rest-seconds 300 \
   --apply
@@ -192,8 +188,8 @@ npm run companion:configure-device -- \
 1. 在电脑上确认三个 LaunchAgent 已加载；
 2. 重启电脑，确认 EMQX 和助手自动起来；
 3. 在时钟上按中键进入 Focus；
-4. 检查本人的 Lark 是否出现公开可见的忙碌日程；
-5. 提前退出，检查日程是否被删除；
+4. 检查本人的 Lark 是否出现“专注中”系统状态；
+5. 提前退出，检查状态是否关闭；
 6. 关闭电脑，确认时钟仍能本地倒计时和播放声音。
 
 查看日志：

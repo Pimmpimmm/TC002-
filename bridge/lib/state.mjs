@@ -92,28 +92,28 @@ function closeSession(store, session, now, reason, notes, actions) {
   session.status = 'closed';
   session.closed_at = now;
   session.close_reason = reason;
-  // Busy is exactly the focus window, so after the deadline the event has already
-  // released itself and the bridge must not call Lark at all (user decision 2026-09-11).
+  // The system status has an explicit end_time, so after the deadline it has already
+  // released itself and the bridge must not call Lark at all.
   if (now >= session.focus_deadline) {
-    notes.push(`session ${session.session_id}: past focus_deadline, event expired by itself, no Lark call`);
-    cancelQueued(store, 'create', session.session_id);
+    session.status_opened = false;
+    notes.push(`session ${session.session_id}: past focus_deadline, system status expired by itself, no Lark call`);
+    cancelQueued(store, 'open', session.session_id);
     return;
   }
-  if (cancelQueued(store, 'create', session.session_id) && !session.event_id) {
-    notes.push(`session ${session.session_id}: create was still queued, cancelled instead of create+delete`);
+  if (cancelQueued(store, 'open', session.session_id) && !session.status_opened) {
+    notes.push(`session ${session.session_id}: open was still queued, cancelled instead of open+close`);
     return;
   }
-  if (!session.event_id) {
-    notes.push(`ALARM session ${session.session_id}: early exit without a known event_id; nothing to delete`);
+  if (!session.status_opened) {
+    notes.push(`ALARM session ${session.session_id}: early exit before status opened; nothing to close`);
     return;
   }
   const action = {
-    id: actionId('delete', session.session_id),
-    type: 'delete',
+    id: actionId('close', session.session_id),
+    type: 'close',
     session_id: session.session_id,
     started_at: session.started_at,
     focus_deadline: session.focus_deadline,
-    event_id: session.event_id,
     attempts: 0,
     next_attempt_at: now
   };
@@ -146,25 +146,24 @@ export function applyEvent(store, envelope, now) {
       session_id: envelope.session_id,
       started_at: envelope.started_at,
       focus_deadline: envelope.focus_deadline,
-      event_id: null,
+      status_opened: false,
       status: 'open',
       opened_at: now,
       last_seen: now
     };
     next.sessions[envelope.session_id] = session;
     if (now >= session.focus_deadline) {
-      // Boot recovery of a round that already ended: nothing to book.
+      // Boot recovery of a round that already ended: nothing to open.
       session.status = 'expired';
       notes.push(`session ${envelope.session_id}: start arrived after focus_deadline, no Lark call`);
       return { store: next, actions, notes };
     }
     const action = {
-      id: actionId('create', envelope.session_id),
-      type: 'create',
+      id: actionId('open', envelope.session_id),
+      type: 'open',
       session_id: envelope.session_id,
       started_at: envelope.started_at,
       focus_deadline: envelope.focus_deadline,
-      event_id: null,
       attempts: 0,
       next_attempt_at: now
     };
@@ -201,7 +200,7 @@ export function applyEvent(store, envelope, now) {
   return { store: next, actions, notes };
 }
 
-/** Marks rounds whose deadline passed; Lark released Busy on its own. */
+/** Marks rounds whose deadline passed; Lark released the system status on its own. */
 export function reconcile(store, now) {
   const next = structuredClone(store);
   const notes = [];
@@ -210,12 +209,14 @@ export function reconcile(store, now) {
       session.status = 'expired';
       session.closed_at = now;
       session.close_reason = 'deadline';
-      notes.push(`session ${session.session_id}: focus_deadline reached, Busy released by end_time`);
+      session.status_opened = false;
+      notes.push(`session ${session.session_id}: focus_deadline reached, system status released by end_time`);
     }
   }
   const before = next.queue.length;
   next.queue = next.queue.filter(action => {
     if (now < action.focus_deadline) return true;
+    if (action.type === 'close' && next.sessions[action.session_id]) next.sessions[action.session_id].status_opened = false;
     notes.push(`action ${action.id}: dropped, focus window already over`);
     return false;
   });
@@ -239,11 +240,8 @@ export function settleAction(store, actionId_, result, now) {
   const session = next.sessions[action.session_id];
   if (result.ok) {
     next.queue = next.queue.filter(item => item.id !== actionId_);
-    if (action.type === 'create' && session) {
-      session.event_id = result.event_id || null;
-      if (!session.event_id) notes.push(`ALARM create for ${action.session_id} returned no event_id`);
-    }
-    if (action.type === 'delete' && session) session.event_id = null;
+    if (action.type === 'open' && session) session.status_opened = true;
+    if (action.type === 'close' && session) session.status_opened = false;
     notes.push(`action ${actionId_}: ok`);
     return { store: next, notes };
   }

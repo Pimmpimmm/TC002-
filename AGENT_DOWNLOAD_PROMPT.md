@@ -12,21 +12,20 @@ Mac 上完成安装，但不让 Agent 索取或写入任何人的 Lark 密钥。
 2. 克隆仓库并运行 npm install。不要下载 Linux 的 emqx-*-amzn2023-amd64 压缩包；
    macOS 请使用 brew install emqx。
 3. 先运行 companion/install-macos.sh 的预演，不要直接加 --apply。确认用户提供的
-   电脑局域网 IP、Lark 主日历 ID、专注秒数和休息秒数后，再执行正式安装。
+   电脑局域网 IP、专注秒数和休息秒数后，再执行正式安装。Lark `open_id` 和系统状态 ID 由授权流程自动获取。
 4. 默认时长是专注 2700 秒、休息 300 秒；如果用户指定其他时长，必须把同一组
    --focus-seconds 和 --rest-seconds 同时写入 Mac 助手安装与
    companion/configure-device.sh，不能只改一边。时长必须在 60..14400 秒。
-5. Lark 状态使用公开日程（visibility=public）。提醒用户：同事能否看到仍受
-   Lark 日历共享权限影响，而且“专注”标题和起止时间会公开显示。
+5. Lark 状态直接使用 Personal Settings API 的 `batch_open/batch_close`，不创建日历日程。
 6. Lark OAuth 只能由用户自己在浏览器完成。绝对不要让用户把 App Secret、access
    token、refresh token、共享密钥发到聊天、写进仓库、写进设备镜像或 MQTT 消息。
    凭据只能存 macOS Keychain。
 7. 配对时钟只运行 configure-device.sh，把电脑局域网 IP、精确 MQTT topic 和时长
    写入可写的 device.conf。不要改 /res，不要刷 update.img，不要执行破坏性恢复。
-8. 配置完成后让用户重启时钟应用，再验证：中键开始 Focus、Lark 出现公开忙碌日程、
-   提前退出会删除日程、自然到期后进入 Rest、休息结束进入下一轮。
+8. 配置完成后让用户重启时钟应用，再验证：中键开始 Focus、Lark 出现“专注中”状态、
+   提前退出会关闭状态、自然到期后进入 Rest、休息结束进入下一轮。
 9. 如果 adb、Wi-Fi、Lark 授权、EMQX 或设备连接失败，先停止并报告具体错误和
-   当前步骤，不要猜 IP、不要猜日历 ID、不要重复刷机。
+   当前步骤，不要猜 IP、不要手填用户或状态 ID、不要重复刷机。
 10. 最后给出已执行命令、服务状态、日志目录和恢复/停止命令的简短总结。
 ```
 

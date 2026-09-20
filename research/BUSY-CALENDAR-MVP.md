@@ -1,4 +1,6 @@
-# TC002 focus → Lark calendar Busy MVP — 2026-09-02
+# TC002 focus → Lark calendar Busy MVP — 2026-09-02 (历史方案，已停用)
+
+> 2026-09-20 起生产路径改用 Personal Settings `batch_open/batch_close`；本文只保留历史调研记录。
 
 > **Superseded implementation timing (2026-09-11):** the active target is 45 minutes focus + 10 minutes rest (`2700/600` seconds). This document preserves the earlier `+1800` probe/evidence. The current handoff is [`HANDOFF.md`](HANDOFF.md).
 

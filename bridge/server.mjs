@@ -7,7 +7,7 @@ import { assertLocalBindHost } from '../probes/tc002-broker.mjs';
 import { verifySignature } from './lib/auth.mjs';
 import { readKeychainSecret } from './lib/keychain.mjs';
 import { executeAction, resolveBase, resolveMode } from './lib/lark.mjs';
-import { createKeychainTokenProvider } from './lib/lark-token.mjs';
+import { createKeychainTenantTokenProvider } from './lib/lark-token.mjs';
 import { loadStore, saveStore } from './lib/persist.mjs';
 import {
   applyEvent, BridgeError, dueActions, emptyStore, FOCUS_SECONDS_DEFAULT, reconcile, settleAction, validateEnvelope
@@ -23,14 +23,14 @@ export function defaultStateFile() {
 
 /**
  * The bridge never decides when a round starts or ends — the device does. Its whole job
- * is: verify the sender, keep one Lark event per session_id, and stop touching Lark once
+ * is: verify the sender, keep one Lark system status per session_id, and stop touching Lark once
  * the focus window is over (SPEC v2 §4, §5).
  */
 export function createBridge({
   secret,
-  calendarId,
+  systemStatusId,
+  userOpenId,
   stateFile = defaultStateFile(),
-  timezone = 'Asia/Shanghai',
   focusSeconds = FOCUS_SECONDS_DEFAULT,
   mode = 'dry',
   base = null,
@@ -43,8 +43,11 @@ export function createBridge({
   if (typeof secret !== 'string' || secret.length < 16) {
     throw new BridgeError('ALARM BRIDGE shared secret must be at least 16 chars', 500);
   }
-  if (typeof calendarId !== 'string' || !calendarId.trim()) {
-    throw new BridgeError('ALARM missing LARK_CALENDAR_ID', 500);
+  if (typeof systemStatusId !== 'string' || !systemStatusId.trim()) {
+    throw new BridgeError('ALARM missing LARK_SYSTEM_STATUS_ID', 500);
+  }
+  if (typeof userOpenId !== 'string' || !userOpenId.trim()) {
+    throw new BridgeError('ALARM missing LARK_USER_OPEN_ID', 500);
   }
   if (!Number.isInteger(focusSeconds) || focusSeconds < 60) {
     throw new BridgeError('ALARM FOCUS_SECONDS must be an integer >= 60', 500);
@@ -64,7 +67,7 @@ export function createBridge({
     for (const action of dueActions(store, now)) {
       let result;
       try {
-        result = await executeAction(action, { mode, base, calendarId, timezone, token, tokenProvider, fetchImpl });
+        result = await executeAction(action, { mode, base, systemStatusId, userOpenId, token, tokenProvider, fetchImpl });
       } catch (error) {
         result = { ok: false, error: error.message };
       }
@@ -77,7 +80,6 @@ export function createBridge({
         type: action.type,
         ok: Boolean(result.ok),
         network: Boolean(result.network),
-        event_id_present: Boolean(result.event_id),
         notes: settled.notes
       });
     }
@@ -177,14 +179,16 @@ export function createBridge({
 
 async function main() {
   const mode = resolveMode();
-  const tokenProvider = mode === 'real' ? createKeychainTokenProvider({ service: KEYCHAIN_SERVICE }) : null;
+  const tokenProvider = mode === 'real' ? createKeychainTenantTokenProvider({ service: KEYCHAIN_SERVICE }) : null;
   const bridge = createBridge({
     mode,
     base: resolveBase(mode),
     secret: process.env.BRIDGE_SHARED_SECRET?.trim() || readKeychainSecret({ service: KEYCHAIN_SERVICE, account: 'shared_secret' }),
-    calendarId: process.env.LARK_CALENDAR_ID?.trim()
-      || readKeychainSecret({ service: KEYCHAIN_SERVICE, account: 'calendar_id' }),
-    token: mode === 'fake' ? readKeychainSecret({ service: KEYCHAIN_SERVICE, account: 'user_access_token' }) : null,
+    systemStatusId: process.env.LARK_SYSTEM_STATUS_ID?.trim()
+      || (mode === 'real' ? readKeychainSecret({ service: KEYCHAIN_SERVICE, account: 'system_status_id' }) : 'status-test'),
+    userOpenId: process.env.LARK_USER_OPEN_ID?.trim()
+      || (mode === 'real' ? readKeychainSecret({ service: KEYCHAIN_SERVICE, account: 'user_open_id' }) : 'ou_test'),
+    token: mode === 'fake' ? readKeychainSecret({ service: KEYCHAIN_SERVICE, account: 'tenant_access_token' }) : null,
     tokenProvider,
     focusSeconds: Number(process.env.FOCUS_SECONDS || FOCUS_SECONDS_DEFAULT)
   });

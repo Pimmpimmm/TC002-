@@ -3,7 +3,7 @@
 这是统一入口的原生 macOS 前端。它把原来需要分别执行的动作收进一个窗口：
 
 1. 填写时钟 IP、电脑 IP、专注/休息分钟数；
-2. 填写本人的 Lark App ID、App Secret 和日历 ID，点击“授权 Lark”；
+2. 填写本人的 Lark App ID 和 App Secret，点击“授权 Lark”；
 3. 点击“启动专注时钟”；
 4. 应用自动安装/启动本机 EMQX、Lark bridge、MQTT adapter，写入设备时长，
    并把临时 Focus bundle 推到 `/tmp`；
@@ -11,7 +11,7 @@
 
 Lark App Secret、OAuth token、refresh token 和 bridge shared secret 不写入 GUI
 配置文件，仍由现有 bridge 写入 macOS 钥匙串。GUI 配置文件只保存设备 IP、时长、
-日历 ID 和项目目录。
+项目目录。用户 `open_id` 和“专注中”状态 ID 在授权时自动获取。
 
 ## 新 Mac 准备
 

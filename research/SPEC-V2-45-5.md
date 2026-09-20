@@ -4,7 +4,7 @@
 **授权状态：用户已明确授权修改 TC002 设备软件（"这 clock 随便改"）。**
 **Lark 租户：国际版，API base = `https://open.larksuite.com`（用户提供的 open.feishu.cn 文档内容等价，仅域名不同）。**
 
-> 2026-09-20 实施更新：Lark 创建的专注日程改为 `visibility=public`，让共享日历中的同事可见；专注/休息时长不再只能写死在固件里，而是由助手通过 `device.conf` 配置（默认 2700/300 秒）。
+> 2026-09-20 实施更新：Lark 改为直接调用 Personal Settings API 开启/关闭“专注中”系统状态，不再创建日历日程；专注/休息时长由助手通过 `device.conf` 配置（默认 2700/300 秒）。
 
 > 2026-09-18 设备交互更新（覆盖下文旧的“中键退出到 IDLE / 到期等待确认”规则）：首次中键从 `READY` 进入 `FOCUS`；`FOCUS` 中键提前进入 `REST` 并沿用原 `stop` 事件；`REST` 中键提前进入下一轮 `FOCUS` 并沿用原 `start` 事件。倒计时自然结束也自动进入下一阶段。旋钮仍退出循环回到 `READY`。Lark 日历 API 与 45 分钟忙碌生命周期不变。
 
@@ -20,7 +20,7 @@
 | 2 | 时长 | 专注 2700 / 休息 600 | 专注 **2700** / 休息 **300**（与设备原生 45+5 一致） |
 | 3 | 提前退出 | `ACTIVE → REST`（进入休息） | **`FOCUS → IDLE`**：切走即回空闲页，删除 Lark 日程 |
 | 4 | 到期行为 | 响一次铃后自动进休息 | **闹钟式**：到期后**持续响铃**，按中键才进休息；休息结束同样持续响铃，按中键才开始下一轮 |
-| 5 | Lark 路径 | 日历 MVP / status 备选 | **只走日历 v4** create + delete（用户 OAuth，不申请 status 高级权限） |
+| 5 | Lark 路径 | 日历 MVP / status 备选 | **只走 Personal Settings v1** batch_open + batch_close（tenant token） |
 
 用户 2026-09-11 追加决策（取代早先的"忙碌保持到确认"）：**日程到点自己过期，桥接不管它；下一轮进入 busy 时再创建一条新日程。** 因此 Lark 忙碌 = **严格 2700 秒**，宽限与 PATCH 延长默认关闭（参数保留，改配置即可启用）。响铃等待期间 Lark 已恢复空闲。
 
@@ -96,31 +96,27 @@ REST_ALARM （持续响铃 + "休息结束"；Lark 无日程）
 
 ---
 
-## 4. Lark 日历契约（国际版）
+## 4. Lark 系统状态契约（国际版）
 
 ### 4.1 调用
 
 | 动作 | 方法 | 路径 | token |
 |---|---|---|---|
-| 取主日历 | POST | `/open-apis/calendar/v4/calendars/primary` | `user_access_token` |
-| 创建忙碌日程 | POST | `/open-apis/calendar/v4/calendars/{calendar_id}/events?idempotency_key=…` | `user_access_token` |
-| 延长日程（仅响铃未确认时） | PATCH | `/open-apis/calendar/v4/calendars/{calendar_id}/events/{event_id}` | `user_access_token` |
-| 删除日程 | DELETE | `/open-apis/calendar/v4/calendars/{calendar_id}/events/{event_id}?need_notification=false` | `user_access_token` |
+| 列出系统状态（安装时） | GET | `/open-apis/personal_settings/v1/system_statuses` | `tenant_access_token` |
+| 创建“专注中”（仅首次） | POST | `/open-apis/personal_settings/v1/system_statuses` | `tenant_access_token` |
+| 开启本人状态 | POST | `/open-apis/personal_settings/v1/system_statuses/{id}/batch_open?user_id_type=open_id` | `tenant_access_token` |
+| 提前关闭本人状态 | POST | `/open-apis/personal_settings/v1/system_statuses/{id}/batch_close?user_id_type=open_id` | `tenant_access_token` |
 
-创建 body 固定为：`summary=专注`、`visibility=public`、`free_busy_status=busy`、`attendee_ability=none`、`vchat.vc_type=no_meeting`、`need_notification=false`、`reminders=[]`、`start_time/end_time` 为 epoch 秒字符串 + IANA 时区。
+授权时通过 `/open-apis/authen/v1/user_info` 获取本人 `open_id`。状态定义在租户内复用，名称为“专注中”，图标 `StatusReading`，颜色 `GREEN`，优先级选当前未使用的最小正整数。
 
-最小用户 scope：`calendar:calendar:read`、`calendar:calendar.event:create`、`calendar:calendar.event:delete`。
+### 4.2 状态生命周期（严格 45 分钟，到点自然过期）
 
-### 4.2 忙碌生命周期（严格 45 分钟，到点自然过期）
+用户决策：**系统状态到点自己解除，桥接不去管；下一轮再开启同一状态。** 因此：
 
-用户决策：**日程到点自己解除，桥接不去管；下一轮进入 busy 时再建一条新的。** 因此：
-
-- 创建时 `end_time = started_at + 2700`（`GRACE_SECONDS = 0`）。忙碌严格等于专注窗口。
-- **到达 deadline 后桥接对 Lark 不做任何调用**——日程已由 `end_time` 自行结束。响铃等待期间 Lark 显示空闲。
-- 唯一的删除时机是**提前退出**：`stop` 在 `now < focus_deadline` 时到达 → DELETE 该日程。**"提前退出"包含两种操作，处理完全一致：按中键，或用旋钮切到别的页面**（`reason=middle_press` / `rotate_away`，都走同一条 stop → DELETE）。到期之后收到的 `stop`（也就是你按中键从响铃进休息）不触发任何请求。
-- 若提前退出时 Mac 关机/断网：DELETE 进重试队列并指数退避，直到 `focus_deadline` 为止；在此之前恢复就会补删掉，恢复不了则最坏情况是忙碌走完完整 45 分钟后自行解除，不会卡住。若 `stop` 整包丢失且无心跳，同理由 `end_time` 兜底。
-- 因此桥接不需要心跳去延长日程；心跳只用于对账（发现设备已离开 FOCUS 却没收到 stop）。
-- `GRACE_SECONDS` / `EXTEND_SECONDS` / `MAX_EXTENSIONS` 作为可选参数保留且默认全 0/关闭。若将来想要"响铃期间保持忙碌"，改配置即可，契约与单测已覆盖该分支。
+- 开启时 `end_time = focus_deadline = started_at + 2700`。
+- **到达 deadline 后桥接对 Lark 不做任何调用**，状态由 `end_time` 自行结束。
+- 提前退出时调 `batch_close`；失败进重试队列并指数退避，直到 `focus_deadline`。
+- 若 `stop` 丢失或 Mac 一直离线，`end_time` 仍保证状态不会永久卡住。心跳只用于对账。
 
 由此得到的好性质：桥接死掉、DELETE 失败、Mac 关机、网络断开，都不可能把忙碌卡住——最坏情况也只是忙碌完整显示 45 分钟。
 
@@ -144,14 +140,14 @@ REST_ALARM （持续响铃 + "休息结束"；Lark 无日程）
 ```
 
 - 心跳：`FOCUS` / `FOCUS_ALARM` 期间每 60 秒一次。
-- **禁止字段**：任何 token、聊天正文、发送者、日历标题/正文、设备序列号、MAC。
+- **禁止字段**：任何 token、聊天正文、发送者、状态文案、设备序列号、MAC。
 - 鉴权：共享密钥 HMAC 头 + 只监听局域网地址；密钥存 Keychain，不进日志、不进设备日志。
 
 Mac 桥接不变量：
 
-1. 同一 `session_id` 的 `start` 幂等：重复不新建日程、不延长 deadline。
-2. `stop` 指向同一 session；重复 `stop` 视为成功；未知 session 的 `stop` 触发对账（删掉遗留的未关闭日程）并记日志。
-3. 状态落盘（含 `session_id` / `event_id` / 绝对 deadline）；重启后只恢复绝对值，不重算。
+1. 同一 `session_id` 的 `start` 幂等：重复不再开启状态、不延长 deadline。
+2. `stop` 指向同一 session；重复 `stop` 视为成功；未知 session 的 `stop` 触发对账并记日志。
+3. 状态落盘（含 `session_id` / `status_opened` / 绝对 deadline）；重启后只恢复绝对值，不重算。
 4. Lark 不可用：指数退避重试；**不得补开已过期轮次**；恢复后先对账再动作。
 5. token / refresh token 只在 macOS Keychain；日志脱敏（沿用 `probes/lib/safety.mjs` 的 redact 规则）。
 
@@ -161,11 +157,11 @@ Mac 桥接不变量：
 
 1. 专注计时严格 2700 秒、休息严格 300 秒（本地单调时钟，误差 ≤1 秒）。
 2. 到期后持续响铃，按中键才切换；不按不切换，不自动跳过。
-3. 每轮只有一条本人 Lark 日程；提前退出后 ≤5 秒删除；重复 start/stop 不产生第二条。
-4. Lark 忙碌严格 = [开始, 开始+2700]，到期由 `end_time` 自行解除，桥接在 deadline 之后不再对 Lark 发任何请求。
+3. 每轮只开启一次本人 Lark“专注中”状态；提前退出后 ≤5 秒关闭；重复 start/stop 不重复调用。
+4. Lark 状态严格 = [开始, 开始+2700]，到期由 `end_time` 自行解除，桥接在 deadline 之后不再对 Lark 发任何请求。
 5. 铃声本地播放，拔掉 Mac / 断网 / Mac 重启都不影响计时与铃声。
-6. 设备断电重启：按绝对 deadline 恢复，不延长旧轮次、不重复创建日程。
-7. 任何日志都不含 token、聊天正文、发送者、完整日历内容。
+6. 设备断电重启：按绝对 deadline 恢复，不延长旧轮次、不重复开启状态。
+7. 任何日志都不含 token、聊天正文、发送者或完整请求体。
 
 ---
 
@@ -184,17 +180,16 @@ Mac 桥接不变量：
 
 - **S1（本地，不碰设备/不碰 Lark）**：把 §3 状态机 + §4 契约 + §5 接口做成 Mac 桥接实现 + dry-run 探针 + 单测；`GRACE`、`FOCUS_SECONDS`、`REST_SECONDS`、`RING_MODE` 全部可配置。
   - **S1 已完成（2026-09-11，`npm test` 21/21 全绿）**：
-    - `probes/lib/lark-calendar.mjs`：本 §4 契约，默认 `focusSeconds=2700 / graceSeconds=0 / maxExtensions=0`，`sessionId` 幂等键，输出 `focus_deadline` / `booked_end` / `busy_ceiling` / `delete_on_early_exit`；宽限与 PATCH 分支保留为可选参数。
     - `bridge/lib/state.mjs`：纯函数状态逻辑——信封白名单校验（出现 `sender`/`content` 一类字段直接拒绝）、`focus_deadline - started_at` 必须精确等于 2700、start 按 `session_id` 幂等、提前退出排队 DELETE、deadline 之后零调用、离线时 start+stop 相互抵消不产生任何请求、心跳对账、失败指数退避、过期动作出队。
     - `bridge/lib/auth.mjs`：HMAC-SHA256 over `${timestamp}.${body}` + ±120 秒重放窗口 + 定长比较。
     - `bridge/lib/persist.mjs`：原子落盘，重启只恢复绝对 deadline。
     - `bridge/lib/lark.mjs`：三种模式 `dry`（零网络）/ `fake`（仅 127.0.0.1）/ `real`（必须 `BRIDGE_ACK_REAL_LARK=YES` + Keychain token）。
-    - `bridge/lib/keychain.mjs`：`security find-generic-password` 读取 shared secret / calendar_id / user_access_token。
-    - `bridge/server.mjs`：`POST /focus`，仅绑本机地址，≤4 KB 请求体，日志只记 `event_id_present` 布尔值；启动即校验密钥长度、日历 ID、时长。
+    - `bridge/lib/keychain.mjs`：`security find-generic-password` 读取 shared secret / app credentials / user_open_id / system_status_id。
+    - `bridge/server.mjs`：`POST /focus`，仅绑本机地址，≤4 KB 请求体；启动即校验密钥长度、用户 ID、状态 ID 和时长。
     - `bridge/fake-lark.mjs`：回环假 Lark，可注入故障，用于 S5 断线/重试测试。
   - S1 待做：LaunchAgent plist + 首次安装脚本（写 Keychain 三项、生成共享密钥）。
-- **S2（Lark 真租户，只读）**：在 open.larksuite.com 建自建应用、授 3 个日历 scope、跑通本人 OAuth，用 `GET /calendar/v4/calendars/primary` 验证不需要 status 高级权限。
-- **S3（Lark 真租户，写一次）**：创建 → 删除，跑通一次真实读写。用户 2026-09-11 已明确："创建了日程然后同步更改状态，别人是可以看见的"，所以这不再当作前置阻塞；但它仍是本仓库唯一没有自己实测过的一环，**第一次真实运行时顺手确认一眼同事视角即可**（确认后把结论写回 `research/FEASIBILITY.md` 与 `BLOCKED.md`，替换那条"unverified"）。
+- **S2（Lark 真租户，一次性配置）**：在 open.larksuite.com 建自建应用、开通系统状态相关权限、跑通本人 OAuth，自动获取 `open_id` 并创建/复用“专注中”。
+- **S3（Lark 真租户）**：跑通一次 `batch_open` → `batch_close`，确认本人及同事视角的状态展示。
 - **S4（设备）**：拿到 §7 答案后，先临时部署 FlyThings demo，只验证中键/旋钮回调 + 循环铃声 + 常亮，不做持久刷写。
 - **S5（联调）**：设备 → Mac → 假 Lark 服务 → 真 Lark；按 §6 七条逐条验收。
 - **S6（收尾）**：LaunchAgent 开机自启、Keychain、日志脱敏复扫、打包。

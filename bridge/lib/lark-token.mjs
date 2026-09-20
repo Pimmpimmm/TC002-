@@ -3,9 +3,6 @@ import { readKeychainSecret, writeKeychainSecret } from './keychain.mjs';
 
 export const LARK_BASE = 'https://open.larksuite.com';
 export const REQUIRED_USER_SCOPES = Object.freeze([
-  'calendar:calendar:read',
-  'calendar:calendar.event:create',
-  'calendar:calendar.event:delete',
   'offline_access'
 ]);
 
@@ -26,6 +23,17 @@ export async function getAppAccessToken({ appId, appSecret, fetchImpl = fetch, b
   const payload = await responseJson(response, 'app token request');
   if (!payload.app_access_token) throw new BridgeError('ALARM Lark app token response omitted app_access_token', 500);
   return payload.app_access_token;
+}
+
+export async function getTenantAccessToken({ appId, appSecret, fetchImpl = fetch, base = LARK_BASE }) {
+  const response = await fetchImpl(`${base}/open-apis/auth/v3/tenant_access_token/internal`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ app_id: appId, app_secret: appSecret })
+  });
+  const payload = await responseJson(response, 'tenant token request');
+  if (!payload.tenant_access_token) throw new BridgeError('ALARM Lark tenant token response omitted tenant_access_token', 500);
+  return { token: payload.tenant_access_token, expiresIn: Number(payload.expire) || 7200 };
 }
 
 async function userTokenRequest({ path, body, appAccessToken, fetchImpl = fetch, base = LARK_BASE, operation }) {
@@ -76,25 +84,16 @@ export async function refreshUserAccessToken({ refreshToken, appAccessToken, fet
   });
 }
 
-export async function getPrimaryCalendar({ userAccessToken, fetchImpl = fetch, base = LARK_BASE }) {
-  const response = await fetchImpl(`${base}/open-apis/calendar/v4/calendars/primary`, {
-    method: 'POST',
+export async function getUserInfo({ userAccessToken, fetchImpl = fetch, base = LARK_BASE }) {
+  const response = await fetchImpl(`${base}/open-apis/authen/v1/user_info`, {
+    method: 'GET',
     headers: {
-      authorization: `Bearer ${userAccessToken}`,
-      'content-type': 'application/json; charset=utf-8'
-    },
-    body: '{}'
+      authorization: `Bearer ${userAccessToken}`
+    }
   });
-  const payload = await responseJson(response, 'primary calendar request');
-  const calendars = payload?.data?.calendars;
-  const calendar = Array.isArray(calendars)
-    ? calendars.find(item => typeof item?.calendar?.calendar_id === 'string' && item.calendar.calendar_id)
-    : null;
-  if (!calendar) throw new BridgeError('ALARM Lark primary calendar response omitted calendar_id', 500);
-  if (calendar.calendar.is_third_party === true) {
-    throw new BridgeError('ALARM Lark primary calendar is read-only third-party data', 500);
-  }
-  return calendar.calendar;
+  const payload = await responseJson(response, 'user info request');
+  if (!payload?.data?.open_id) throw new BridgeError('ALARM Lark user info response omitted open_id', 500);
+  return payload.data;
 }
 
 export function persistTokenBundle({ service, bundle, now, write = writeKeychainSecret }) {
@@ -129,6 +128,30 @@ export function createKeychainTokenProvider({
       const bundle = await refreshUserAccessToken({ refreshToken, appAccessToken, fetchImpl, base });
       persistTokenBundle({ service, bundle, now: clock(), write });
       return bundle.access_token;
+    })();
+    try { return await inFlight; } finally { inFlight = null; }
+  };
+}
+
+export function createKeychainTenantTokenProvider({
+  service,
+  fetchImpl = fetch,
+  clock = () => Math.floor(Date.now() / 1000),
+  read = readKeychainSecret,
+  base = LARK_BASE
+}) {
+  let cached = null;
+  let inFlight = null;
+  return async function getTenantToken() {
+    const now = clock();
+    if (cached && now < cached.expiresAt - 120) return cached.token;
+    if (inFlight) return inFlight;
+    inFlight = (async () => {
+      const appId = read({ service, account: 'app_id' });
+      const appSecret = read({ service, account: 'app_secret' });
+      const result = await getTenantAccessToken({ appId, appSecret, fetchImpl, base });
+      cached = { token: result.token, expiresAt: clock() + result.expiresIn };
+      return result.token;
     })();
     try { return await inFlight; } finally { inFlight = null; }
   };

@@ -8,7 +8,6 @@ struct StoredConfig: Codable {
     var hostIP = ""
     var focusMinutes = "45"
     var restMinutes = "5"
-    var calendarID = ""
     var repoPath = ""
 }
 
@@ -22,7 +21,6 @@ final class AppModel {
     var hostIP = ""
     var focusMinutes = "45"
     var restMinutes = "5"
-    var calendarID = ""
     var repoPath = ""
     var appID = ""
     var appSecret = ""
@@ -37,7 +35,7 @@ final class AppModel {
         let defaults = FileManager.default.currentDirectoryPath
         let configURL = supportDirectory().appendingPathComponent("config.json")
         if let data = try? Data(contentsOf: configURL), let config = try? JSONDecoder().decode(StoredConfig.self, from: data) {
-            deviceIP = config.deviceIP; hostIP = config.hostIP; focusMinutes = config.focusMinutes; restMinutes = config.restMinutes; calendarID = config.calendarID; repoPath = config.repoPath
+            deviceIP = config.deviceIP; hostIP = config.hostIP; focusMinutes = config.focusMinutes; restMinutes = config.restMinutes; repoPath = config.repoPath
         }
         if repoPath.isEmpty || !FileManager.default.fileExists(atPath: repoPath) {
             let bundled = Bundle.main.resourceURL?.appendingPathComponent("tc002-repo").path ?? ""
@@ -47,7 +45,7 @@ final class AppModel {
         }
         if hostIP.isEmpty { hostIP = detectHostIP() }
         if appID.isEmpty { appID = (try? Self.run("/usr/bin/security", args: ["find-generic-password", "-s", keychainService, "-a", "app_id", "-w"]))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
-        isAuthorized = ["app_id", "app_secret", "user_access_token", "refresh_token", "access_token_expires_at"].allSatisfy { hasKeychainValue(account: $0) }
+        isAuthorized = ["app_id", "app_secret", "user_open_id", "system_status_id"].allSatisfy { hasKeychainValue(account: $0) }
         notify()
     }
 
@@ -72,16 +70,15 @@ final class AppModel {
         guard let focus = Int(focusMinutes), let rest = Int(restMinutes), focus >= 1, rest >= 1 else { status = "专注和休息时长必须是正整数分钟"; notify(); return }
         guard !deviceIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { status = "请填写时钟 IP"; notify(); return }
         guard !hostIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { status = "请填写电脑 IP"; notify(); return }
-        guard !calendarID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { status = "请填写 Lark 日历 ID"; notify(); return }
         guard isAuthorized else { status = "请先完成 Lark 授权"; notify(); return }
         guard FileManager.default.fileExists(atPath: repoPath + "/companion/install-macos.sh") else { status = "项目目录无效，找不到 companion/install-macos.sh"; notify(); return }
         do { try Self.preflight(repo: repoPath) }
         catch { status = "启动前检查失败：\(error.localizedDescription)"; appendLog(error.localizedDescription); notify(); return }
         save(); isBusy = true; status = "正在启动本机服务并连接时钟…"; appendLog("准备启动：专注 \(focus) 分钟，休息 \(rest) 分钟，设备 \(deviceIP)"); notify()
-        let focusSeconds = focus * 60; let restSeconds = rest * 60; let repo = repoPath; let device = deviceIP.contains(":") ? deviceIP : deviceIP + ":5555"; let host = hostIP; let calendar = calendarID
+        let focusSeconds = focus * 60; let restSeconds = rest * 60; let repo = repoPath; let device = deviceIP.contains(":") ? deviceIP : deviceIP + ":5555"; let host = hostIP
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                let install = try Self.run("/bin/bash", args: [repo + "/companion/install-macos.sh", "--lan-host", host, "--mode", "real", "--calendar-id", calendar, "--focus-seconds", String(focusSeconds), "--rest-seconds", String(restSeconds), "--apply"], cwd: repo)
+                let install = try Self.run("/bin/bash", args: [repo + "/companion/install-macos.sh", "--lan-host", host, "--mode", "real", "--focus-seconds", String(focusSeconds), "--rest-seconds", String(restSeconds), "--apply"], cwd: repo)
                 self.updateOnMain { self.appendLog(install); self.notify() }
                 let configure = try Self.run("/bin/bash", args: [repo + "/companion/configure-device.sh", "--adb-target", device, "--lan-host", host, "--focus-seconds", String(focusSeconds), "--rest-seconds", String(restSeconds)], cwd: repo)
                 self.updateOnMain { self.appendLog(configure); self.notify() }
@@ -109,7 +106,7 @@ final class AppModel {
     }
 
     func save() {
-        let config = StoredConfig(deviceIP: deviceIP, hostIP: hostIP, focusMinutes: focusMinutes, restMinutes: restMinutes, calendarID: calendarID, repoPath: repoPath)
+        let config = StoredConfig(deviceIP: deviceIP, hostIP: hostIP, focusMinutes: focusMinutes, restMinutes: restMinutes, repoPath: repoPath)
         do { let directory = supportDirectory(); try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true); try JSONEncoder().encode(config).write(to: directory.appendingPathComponent("config.json"), options: .atomic) }
         catch { appendLog("保存配置失败：\(error.localizedDescription)") }
     }
@@ -169,7 +166,7 @@ final class AppModel {
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let model = AppModel(); private var window: NSWindow!
-    private let deviceField = NSTextField(); private let hostField = NSTextField(); private let focusField = NSTextField(); private let restField = NSTextField(); private let appIDField = NSTextField(); private let appSecretField = NSSecureTextField(); private let calendarField = NSTextField(); private let repoField = NSTextField(); private let statusField = NSTextField(labelWithString: ""); private let logView = NSTextView()
+    private let deviceField = NSTextField(); private let hostField = NSTextField(); private let focusField = NSTextField(); private let restField = NSTextField(); private let appIDField = NSTextField(); private let appSecretField = NSSecureTextField(); private let repoField = NSTextField(); private let statusField = NSTextField(labelWithString: ""); private let logView = NSTextView()
     private let startButton = NSButton(title: "启动专注时钟", target: nil, action: nil); private let stopButton = NSButton(title: "停止电脑助手", target: nil, action: nil); private let rebootButton = NSButton(title: "恢复原生界面（重启时钟）", target: nil, action: nil); private let authorizeButton = NSButton(title: "授权 Lark", target: nil, action: nil)
 
     static func main() { let app = NSApplication.shared; let delegate = AppDelegate(); app.delegate = delegate; app.setActivationPolicy(.regular); withExtendedLifetime(delegate) { app.run() } }
@@ -182,7 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let title = NSTextField(labelWithString: "TC002 专注助手"); title.font = .systemFont(ofSize: 26, weight: .bold); stack.addArrangedSubview(title); let subtitle = NSTextField(labelWithString: "一键连接、临时启动；设备重启后自动回到原生界面"); subtitle.textColor = .secondaryLabelColor; stack.addArrangedSubview(subtitle)
         stack.addArrangedSubview(section("设备连接", [row("时钟 IP", deviceField, "例如 192.168.1.131"), rowWithButton("电脑 IP", hostField, "局域网地址", "自动识别", #selector(detectHost))]))
         stack.addArrangedSubview(section("专注时间", [row("专注（分钟）", focusField, "45"), row("休息（分钟）", restField, "5")]))
-        stack.addArrangedSubview(section("Lark 账号", [row("App ID", appIDField, "每个人自己的 Lark App ID"), row("App Secret", appSecretField, "只用于授权，不写入配置文件"), row("日历 ID", calendarField, "本人的 Lark 主日历 ID"), buttonRow(authorizeButton)]))
+        stack.addArrangedSubview(section("Lark 账号", [row("App ID", appIDField, "每个人自己的 Lark App ID"), row("App Secret", appSecretField, "只用于授权，不写入配置文件"), buttonRow(authorizeButton)]))
         stack.addArrangedSubview(section("高级：项目目录", [row("项目目录", repoField, "Git 仓库目录")]))
         startButton.target = self; startButton.action = #selector(startFocus); startButton.keyEquivalent = "\r"; startButton.contentTintColor = .systemGreen; stopButton.target = self; stopButton.action = #selector(stopServices); rebootButton.target = self; rebootButton.action = #selector(reboot); rebootButton.contentTintColor = .systemRed
         let actions = NSStackView(views: [startButton, stopButton]); actions.orientation = .horizontal; actions.spacing = 12; actions.distribution = .fillEqually; stack.addArrangedSubview(actions); stack.addArrangedSubview(rebootButton)
@@ -220,8 +217,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func rowLabel(_ title: String, _ view: NSView) -> NSView { let row = NSStackView(views: [label(title), view]); row.orientation = .horizontal; row.spacing = 8; return row }
     private func label(_ text: String) -> NSTextField { let field = NSTextField(labelWithString: text); field.widthAnchor.constraint(equalToConstant: 100).isActive = true; field.heightAnchor.constraint(equalToConstant: 28).isActive = true; return field }
     private func buttonRow(_ button: NSButton) -> NSView { button.target = self; button.action = #selector(authorize); return button }
-    private func collectFields() { model.deviceIP = deviceField.stringValue; model.hostIP = hostField.stringValue; model.focusMinutes = focusField.stringValue; model.restMinutes = restField.stringValue; model.appID = appIDField.stringValue; model.appSecret = appSecretField.stringValue; model.calendarID = calendarField.stringValue; model.repoPath = repoField.stringValue }
-    private func refresh() { DispatchQueue.main.async { self.deviceField.stringValue = self.model.deviceIP; self.hostField.stringValue = self.model.hostIP; self.focusField.stringValue = self.model.focusMinutes; self.restField.stringValue = self.model.restMinutes; self.appIDField.stringValue = self.model.appID; self.calendarField.stringValue = self.model.calendarID; self.repoField.stringValue = self.model.repoPath; self.statusField.stringValue = self.model.status; self.logView.string = self.model.logText; self.authorizeButton.title = self.model.isAuthorized ? "重新授权 Lark" : "授权 Lark"; self.startButton.isEnabled = !self.model.isBusy; self.stopButton.isEnabled = !self.model.isBusy; self.rebootButton.isEnabled = !self.model.isBusy } }
+    private func collectFields() { model.deviceIP = deviceField.stringValue; model.hostIP = hostField.stringValue; model.focusMinutes = focusField.stringValue; model.restMinutes = restField.stringValue; model.appID = appIDField.stringValue; model.appSecret = appSecretField.stringValue; model.repoPath = repoField.stringValue }
+    private func refresh() { DispatchQueue.main.async { self.deviceField.stringValue = self.model.deviceIP; self.hostField.stringValue = self.model.hostIP; self.focusField.stringValue = self.model.focusMinutes; self.restField.stringValue = self.model.restMinutes; self.appIDField.stringValue = self.model.appID; self.repoField.stringValue = self.model.repoPath; self.statusField.stringValue = self.model.status; self.logView.string = self.model.logText; self.authorizeButton.title = self.model.isAuthorized ? "重新授权 Lark" : "授权 Lark"; self.startButton.isEnabled = !self.model.isBusy; self.stopButton.isEnabled = !self.model.isBusy; self.rebootButton.isEnabled = !self.model.isBusy } }
     @objc private func detectHost() { model.detectHost() }
     @objc private func authorize() { collectFields(); model.authorizeLark() }
     @objc private func startFocus() { collectFields(); model.startFocus() }

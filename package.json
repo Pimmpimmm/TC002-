@@ -19,7 +19,6 @@
     "probe:capture": "node probes/tc002-capture.mjs",
     "probe:notify": "node probes/tc002-notify.mjs",
     "probe:lark": "node probes/lark-status-dry-run.mjs",
-    "probe:lark:calendar": "node probes/lark-calendar-dry-run.mjs",
     "probe:secrets": "node probes/secret-scan.mjs",
     "probe:ulanzi:audit": "node probes/ulanzi-source-audit.mjs",
     "probe:studio:audit": "node probes/studio-config-audit.mjs",
@@ -28,7 +27,7 @@
     "bridge": "node bridge/server.mjs",
     "bridge:mqtt": "node bridge/mqtt-adapter.mjs",
     "bridge:oauth": "node bridge/oauth.mjs",
-    "bridge:calendar": "node bridge/setup-calendar.mjs",
+    "bridge:status": "node bridge/setup-system-status.mjs",
     "bridge:fake-lark": "node bridge/fake-lark.mjs",
     "companion:install": "bash companion/install-macos.sh",
     "companion:configure-device": "bash companion/configure-device.sh"

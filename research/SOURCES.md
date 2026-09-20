@@ -1,4 +1,4 @@
-# Sources (12/12), accessed 2026-08-31–2026-09-02 Asia/Shanghai
+# Sources, accessed 2026-08-31–2026-09-20 Asia/Shanghai
 
 1. [Ulanzi Studio 插件开发指南](https://bbs.ulanzistudio.com/thread-20-1-1.html), official forum, posted 2025-07-29; lines 44–59 identify Node ≥20 and the public plugin SDK.
 2. [Ulanzi Studio V3.1.0 TC002 guide](https://bbs.ulanzistudio.com/thread-470-1-1.html), official forum, posted 2026-07-08; lines 43–64 give V3.1.0, 52×16 and MQTT; lines 244–258 describe arbitrary-topic DIY MQTT and native BUSY Clock.
@@ -12,3 +12,6 @@
 10. [Lark get system statuses](https://open.larksuite.com/document/server-docs/personal_settings-v1/system_status/list), official Markdown, accessed 2026-08-31; requires `personal_settings:status:system_status_update` and a tenant token.
 11. [Official Lark Node SDK](https://github.com/larksuite/node-sdk), inspected at commit `42105497368b771ac22c2d7fb3c68728572d179c` on 2026-09-01. `personal_settings.ts` types direct status calls; `calendar.ts` documents user/tenant identity selection, primary-calendar lookup, organizer/owner-writer requirements, create/delete paths, `free_busy_status`, `need_notification`, `event_id`, and `idempotency_key`.
 12. Official overseas Lark Calendar v4 API family, accessed 2026-09-01: [create event](https://open.larksuite.com/document/server-docs/calendar-v4/calendar-event/create), [delete event](https://open.larksuite.com/document/server-docs/calendar-v4/calendar-event/delete), and [primary calendar](https://open.larksuite.com/document/server-docs/calendar-v4/calendar/primary). These are the production endpoints; the user's Feishu links were not substituted for the confirmed Lark domain.
+13. [Lark create system status](https://open.larksuite.com/document/server-docs/personal_settings-v1/system_status/create), official server API, re-checked 2026-09-20; creates a tenant-level status definition and returns `system_status_id`.
+14. [Lark OAuth user info](https://open.larksuite.com/document/server-docs/authentication-management/login-state-management/get), official server API, re-checked 2026-09-20; a user access token returns the current user's `open_id`.
+15. [Official Lark Go SDK Personal Settings v1 model](https://github.com/larksuite/oapi-sdk-go/blob/v3_main/service/personal_settings/v1/model.go), accessed 2026-09-20; confirms `items`, `system_status`, `user_list`, `end_time`, `result_list`, `success_show`, icon and color enum shapes used by the implementation.

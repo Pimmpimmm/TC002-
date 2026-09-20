@@ -3,10 +3,11 @@ import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { readKeychainSecret } from './lib/keychain.mjs';
+import { readKeychainSecret, writeKeychainSecret } from './lib/keychain.mjs';
 import {
-  authorizationUrl, exchangeAuthorizationCode, getAppAccessToken, persistTokenBundle
+  authorizationUrl, exchangeAuthorizationCode, getAppAccessToken, getTenantAccessToken, getUserInfo, persistTokenBundle
 } from './lib/lark-token.mjs';
+import { ensureFocusSystemStatus } from './lib/system-status.mjs';
 import { KEYCHAIN_SERVICE } from './server.mjs';
 
 export const OAUTH_HOST = '127.0.0.1';
@@ -46,8 +47,13 @@ export async function runOAuth({
       const appAccessToken = await getAppAccessToken({ appId, appSecret, fetchImpl });
       const bundle = await exchangeAuthorizationCode({ code, appAccessToken, fetchImpl });
       persistTokenBundle({ service, bundle, now: clock() });
+      const user = await getUserInfo({ userAccessToken: bundle.access_token, fetchImpl });
+      writeKeychainSecret({ service, account: 'user_open_id', value: user.open_id });
+      const tenant = await getTenantAccessToken({ appId, appSecret, fetchImpl });
+      const ensured = await ensureFocusSystemStatus({ tenantAccessToken: tenant.token, fetchImpl });
+      writeKeychainSecret({ service, account: 'system_status_id', value: ensured.status.system_status_id });
       response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }).end('Lark authorization succeeded. You can close this page.');
-      finish.resolve({ ok: true });
+      finish.resolve({ ok: true, createdStatus: ensured.created });
     } catch (error) {
       response.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' }).end('Authorization failed. Return to Terminal for the error.');
       finish.reject(error);
@@ -66,7 +72,7 @@ export async function runOAuth({
   log('\n授权后浏览器会自动返回本机。请不要关闭这个终端窗口。\n');
   try {
     await completed;
-    log('授权成功：Token 已写入 macOS 钥匙串，未写入项目文件。');
+    log('授权成功：Token、用户 open_id 和“专注中”状态 ID 已写入 macOS 钥匙串。');
   } finally {
     clearTimeout(timer);
     await new Promise(resolve => server.close(resolve));

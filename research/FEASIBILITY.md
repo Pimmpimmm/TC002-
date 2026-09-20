@@ -2,7 +2,7 @@
 
 > **Current handoff override (2026-09-11):** the implementation target is now 45 minutes focus + 10 minutes rest (`2700/600` seconds). The `+1800` values below are historical evidence from the previous requirement; use [`HANDOFF.md`](HANDOFF.md) as the active implementation brief.
 
-> **Current narrowed decision (2026-09-20):** the active MVP is TC002 focus start → public Lark Calendar Busy event → deadline cleanup → next focus creates a new event. Its only recommended architecture and updated Ulanzi/Lark evidence are in [`BUSY-CALENDAR-MVP.md`](BUSY-CALENDAR-MVP.md). The five decisions below preserve the completed broader BUSY/status/message study; its direct tenant status path is superseded for the current MVP by user-OAuth calendar events.
+> **Current decision (2026-09-20):** the production path is TC002 focus start → Lark Personal Settings `batch_open` → `end_time` automatic expiry or early `batch_close`. Calendar events are no longer used. Older calendar analysis below is retained only as historical evidence.
 
 > Older paragraphs in this research folder may say “private” because they record an earlier probe contract. The shipped implementation and current README use `visibility=public`.
 >

@@ -12,7 +12,6 @@ LOCAL_PORT="1884"
 TOPIC="ulanzi/tc002-focus/events/focus"
 FOCUS_SECONDS="2700"
 REST_SECONDS="300"
-CALENDAR_ID=""
 APPLY=0
 
 alarm() { printf 'ALARM %s\n' "$*" >&2; exit 2; }
@@ -24,7 +23,6 @@ usage() {
   --emqx-home <path>      macOS EMQX 目录；省略时自动寻找 Homebrew EMQX
   --lan-host <ip>         本机局域网 IPv4；时钟通过它连接 EMQX
   --mode dry|fake|real    bridge 模式（默认 dry）
-  --calendar-id <id>      real 模式下本人的 Lark 主日历 ID
   --mqtt-topic <topic>    设备事件精确主题
   --focus-seconds <n>     专注时长（默认 2700）
   --rest-seconds <n>      休息时长（默认 300）
@@ -33,7 +31,7 @@ usage() {
 
 示例：
   companion/install-macos.sh --emqx-home /opt/emqx \
-    --lan-host 192.0.2.100 --mode real --calendar-id <id> --apply
+    --lan-host 192.0.2.100 --mode real --apply
 USAGE
 }
 
@@ -42,7 +40,6 @@ while [ $# -gt 0 ]; do
     --emqx-home) EMQX_HOME="${2:-}"; shift 2 ;;
     --lan-host) LAN_HOST="${2:-}"; shift 2 ;;
     --mode) MODE="${2:-}"; shift 2 ;;
-    --calendar-id) CALENDAR_ID="${2:-}"; shift 2 ;;
     --mqtt-topic) TOPIC="${2:-}"; shift 2 ;;
     --focus-seconds) FOCUS_SECONDS="${2:-}"; shift 2 ;;
     --rest-seconds) REST_SECONDS="${2:-}"; shift 2 ;;
@@ -113,7 +110,7 @@ PLAN
 [ -f "$TEMPLATE" ] || alarm "缺少 EMQX plist 模板: $TEMPLATE"
 if [ "$MODE" = "real" ]; then
   [ -x /usr/bin/security ] || alarm "找不到 macOS Keychain 工具"
-  for ACCOUNT in app_id app_secret user_access_token refresh_token access_token_expires_at; do
+  for ACCOUNT in app_id app_secret user_open_id system_status_id; do
     /usr/bin/security find-generic-password -s tc002-focus-bridge -a "$ACCOUNT" -w >/dev/null 2>&1 || \
       alarm "钥匙串缺少 $ACCOUNT，请先完成 Lark 授权"
   done
@@ -153,7 +150,6 @@ BRIDGE_ARGS=(
   --mqtt-topic "$TOPIC"
   --apply
 )
-[ -n "$CALENDAR_ID" ] && BRIDGE_ARGS+=(--calendar-id "$CALENDAR_ID")
 "$REPO/bridge/install.sh" "${BRIDGE_ARGS[@]}"
 
 echo "本机 EMQX、bridge 和 MQTT adapter 已安装并加载。"

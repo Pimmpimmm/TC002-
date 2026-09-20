@@ -1,5 +1,7 @@
 # BLOCKED — 2026-09-11
 
+> 2026-09-20 更新：生产实现已改为 Personal Settings `batch_open/batch_close`，不再使用日历。下方日历条目只是历史记录。真租户仍需开通系统状态权限，并可能需要管理员审批应用发布/安装。
+
 ## 0. 2026-09-03 最高优先：本轮会话的可用外壳不是该 macOS 主机（证据置顶）
 
 **期望值**（`research/environment.txt`，2026-08-31 在 macOS 主机采集）：macOS `26.5.2` / build `25F84` / arm64、Node `v24.18.0`、npm `11.16.0`、Swift `6.3.3`。
@@ -43,7 +45,7 @@ $ curl https://open.larksuite.com/   exit 56（连接被代理拒绝）
 3. **Calendar-to-visible-status — 用户已确认（2026-09-11）**：用户明确表示"创建了日程然后同步更改状态，别人是可以看见的"，并在被追问时再次确认"确实可见"。据此该条不再作为前置阻塞；仍保留一条留痕要求：第一次真实 create/delete 时顺手确认一眼同事视角，把结果写回本条。以下为原始记录（仅存档）：
 
    **Calendar-to-visible-status behavior unverified (superseded by the 2026-09-11 user confirmation above):** the official SDK proves user-token create/delete and `free_busy_status=busy`; customer support says it indirectly displays personal status. A real overseas Lark tenant still must verify propagation and deletion behavior. This round is prohibited from changing actual Lark status.
-4. **Administrator nuance:** calendar calls can use the same user's OAuth token and do not inherently need the tenant-token system-status scope. A tenant's custom-app publishing/install/scope policy may still require administrator approval; “only myself” does not guarantee exemption.
+4. **Administrator nuance (superseded):** the active direct-status path uses a tenant token and the system-status permissions. Tenant custom-app publishing, installation, and permission policy may require administrator approval; “only myself” does not guarantee exemption.
 
 ## Broader original scope retained
 

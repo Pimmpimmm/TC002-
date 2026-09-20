@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  authorizationUrl, createKeychainTokenProvider, exchangeAuthorizationCode, getAppAccessToken,
-  getPrimaryCalendar
+  authorizationUrl, createKeychainTenantTokenProvider, createKeychainTokenProvider, exchangeAuthorizationCode,
+  getAppAccessToken, getTenantAccessToken, getUserInfo
 } from './lib/lark-token.mjs';
 
 test('authorization URL contains the exact local redirect and unpredictable state', () => {
@@ -12,12 +12,7 @@ test('authorization URL contains the exact local redirect and unpredictable stat
   assert.equal(url.searchParams.get('app_id'), 'cli_test');
   assert.equal(url.searchParams.get('redirect_uri'), 'http://127.0.0.1:8788/oauth/callback');
   assert.equal(url.searchParams.get('state'), 'state-123');
-  assert.deepEqual(url.searchParams.get('scope').split(' ').sort(), [
-    'calendar:calendar.event:create',
-    'calendar:calendar.event:delete',
-    'calendar:calendar:read',
-    'offline_access'
-  ]);
+  assert.deepEqual(url.searchParams.get('scope').split(' '), ['offline_access']);
 });
 
 test('authorization exchange uses an app token and never sends the app secret to the user-token endpoint', async () => {
@@ -64,9 +59,9 @@ test('token provider refreshes an expiring token, persists rotation, and reuses 
   assert.equal(calls, 2);
 });
 
-test('primary calendar lookup uses the user token and returns a writable calendar id', async () => {
+test('user info lookup uses the user token and returns open_id', async () => {
   const calls = [];
-  const calendar = await getPrimaryCalendar({
+  const user = await getUserInfo({
     userAccessToken: 'user-token',
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
@@ -75,13 +70,32 @@ test('primary calendar lookup uses the user token and returns a writable calenda
         status: 200,
         json: async () => ({
           code: 0,
-          data: { calendars: [{ calendar: { calendar_id: 'primary-test', role: 'owner', is_third_party: false } }] }
+          data: { open_id: 'ou_test', name: 'Tester' }
         })
       };
     }
   });
-  assert.equal(calendar.calendar_id, 'primary-test');
-  assert.equal(calls[0].url.endsWith('/open-apis/calendar/v4/calendars/primary'), true);
-  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(user.open_id, 'ou_test');
+  assert.equal(calls[0].url.endsWith('/open-apis/authen/v1/user_info'), true);
+  assert.equal(calls[0].options.method, 'GET');
   assert.equal(calls[0].options.headers.authorization, 'Bearer user-token');
+});
+
+test('tenant token provider caches the tenant token until shortly before expiry', async () => {
+  let now = 1000;
+  let calls = 0;
+  const read = ({ account }) => ({ app_id: 'cli_test', app_secret: 'secret-value' })[account];
+  const fetchImpl = async (url, options) => {
+    calls += 1;
+    assert.equal(url.endsWith('/tenant_access_token/internal'), true);
+    assert.deepEqual(JSON.parse(options.body), { app_id: 'cli_test', app_secret: 'secret-value' });
+    return { ok: true, status: 200, json: async () => ({ code: 0, tenant_access_token: 'tenant-token', expire: 7200 }) };
+  };
+  const direct = await getTenantAccessToken({ appId: 'cli_test', appSecret: 'secret-value', fetchImpl });
+  assert.equal(direct.token, 'tenant-token');
+  const provider = createKeychainTenantTokenProvider({ service: 'test', read, fetchImpl, clock: () => now });
+  assert.equal(await provider(), 'tenant-token');
+  now += 60;
+  assert.equal(await provider(), 'tenant-token');
+  assert.equal(calls, 2);
 });

@@ -1,11 +1,10 @@
 # Ulanzi TC002 专注时钟
 
 这是一个给 Ulanzi TC002 使用的 Focus / Rest 专注时钟，并把当前用户的
-Lark 日历忙碌状态同步出去。默认是专注 45 分钟、休息 5 分钟，但每个人
+Lark“专注中”系统状态同步出去。默认是专注 45 分钟、休息 5 分钟，但每个人
 都可以在助手安装/配对时自定义时长。
 
-Lark 忙碌日程现在使用 `visibility=public`：在 Lark 日历共享权限允许的前提下，
-同事可以看见这段“专注”日程和时间。它不再是仅自己可见的私密日程。
+运行时直接调用 Lark Personal Settings API，不再创建或删除日历日程。
 
 ## 工作方式
 
@@ -94,7 +93,6 @@ ipconfig getifaddr en0
 bash companion/install-macos.sh \
   --lan-host 192.0.2.100 \
   --mode real \
-  --calendar-id <本人的主日历ID> \
   --focus-seconds 2700 \
   --rest-seconds 300
 ```
@@ -109,7 +107,6 @@ bash companion/install-macos.sh \
 bash companion/install-macos.sh \
   --lan-host 192.0.2.100 \
   --mode real \
-  --calendar-id <本人的主日历ID> \
   --focus-seconds 2700 \
   --rest-seconds 300 \
   --apply
@@ -139,8 +136,8 @@ npm run companion:configure-device -- \
 
 ### 7. 验证
 
-按中键进入 Focus，确认 Lark 出现公开的忙碌日程；提前退出，确认日程
-被删除。修改时长后重新运行 `configure-device.sh`，再重启时钟应用，新的
+按中键进入 Focus，确认 Lark 出现“专注中”系统状态；提前退出，确认状态
+被关闭。修改时长后重新运行 `configure-device.sh`，再重启时钟应用，新的
 专注/休息时长就会生效。关闭电脑后，时钟本地计时和声音仍应继续工作。
 
 日志目录：
@@ -174,7 +171,7 @@ launchctl unload "$HOME/Library/LaunchAgents/com.tc002.focus-mqtt.plist"
 ## 代码目录
 
 ```text
-bridge/       Lark OAuth、日历状态机和 MQTT adapter
+bridge/       Lark OAuth、系统状态机和 MQTT adapter
 companion/    macOS 本机 EMQX 与后台服务安装器
 device/       TC002 FlyThings 应用与设备端 MQTT 配置读取
 probes/       MQTT、Lark 和安全性测试

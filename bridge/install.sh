@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # First-time setup for the TC002 focus bridge (research/SPEC-V2-45-5.md §8 / S1).
-# Writes the shared secret and calendar id into the macOS Keychain and
+# Verifies the shared secret and Lark system-status identifiers in Keychain and
 # installs a LaunchAgent. Prints its plan and changes NOTHING unless --apply is given.
 set -euo pipefail
 
@@ -11,7 +11,6 @@ MODE="dry"
 HOST="127.0.0.1"
 PORT="8787"
 FOCUS_SECONDS="2700"
-CALENDAR_ID=""
 MQTT_BROKER="mqtt://127.0.0.1:1883"
 MQTT_TOPIC="ulanzi/tc002-focus/events/focus"
 APPLY=0
@@ -23,17 +22,16 @@ usage() {
 用法: bridge/install.sh [选项]
 
   --apply                 真正写入 Keychain 并安装 LaunchAgent（默认只打印计划）
-  --mode dry|fake|real    dry=完全不碰网络（默认）；real=会真的改 Lark 日历
+  --mode dry|fake|real    dry=完全不碰网络（默认）；real=会真的改 Lark 系统状态
   --host <ip>             监听地址；先用 127.0.0.1 自测，联调时改成本机局域网 IP
   --port <port>           监听端口（默认 8787）
   --focus-seconds <n>     专注秒数（默认 2700）
-  --calendar-id <id>      Lark 主日历 ID；首次 --apply 时必填（之后从 Keychain 读）
   --mqtt-broker <url>     本机 EMQX 地址（默认 mqtt://127.0.0.1:1883）
   --mqtt-topic <topic>    时钟事件专用主题（默认 ulanzi/tc002-focus/events/focus）
   -h, --help              显示本说明
 
 real 模式直接使用 setup-lark-oauth.sh 写入钥匙串的 OAuth 凭据，并自动续期。
-fake 模式的测试 token 仍通过隐藏输入读取，不会进 shell 历史。
+fake 模式的测试 tenant token 仍通过隐藏输入读取，不会进 shell 历史。
 USAGE
 }
 
@@ -44,7 +42,6 @@ while [ $# -gt 0 ]; do
     --host) HOST="${2:-}"; shift 2 ;;
     --port) PORT="${2:-}"; shift 2 ;;
     --focus-seconds) FOCUS_SECONDS="${2:-}"; shift 2 ;;
-    --calendar-id) CALENDAR_ID="${2:-}"; shift 2 ;;
     --mqtt-broker) MQTT_BROKER="${2:-}"; shift 2 ;;
     --mqtt-topic) MQTT_TOPIC="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -80,17 +77,9 @@ keychain_set() { /usr/bin/security add-generic-password -U -s "$SERVICE" -a "$1"
 SECRET_STATUS="reuse existing keychain item"
 keychain_has shared_secret || SECRET_STATUS="generate a new 32-byte secret"
 
-if [ -z "$CALENDAR_ID" ] && ! keychain_has calendar_id; then
-  CALENDAR_STATUS="MISSING —— 首次 --apply 必须带 --calendar-id"
-elif [ -n "$CALENDAR_ID" ]; then
-  CALENDAR_STATUS="write the id given on the command line"
-else
-  CALENDAR_STATUS="reuse existing keychain item"
-fi
-
 TOKEN_STATUS="not needed in dry mode"
-[ "$MODE" = "fake" ] && TOKEN_STATUS="prompt for test user_access_token (hidden input)"
-[ "$MODE" = "real" ] && TOKEN_STATUS="reuse OAuth credentials from Keychain with automatic refresh"
+[ "$MODE" = "fake" ] && TOKEN_STATUS="prompt for test tenant_access_token (hidden input)"
+[ "$MODE" = "real" ] && TOKEN_STATUS="obtain tenant_access_token from app credentials with automatic refresh"
 ACK_VALUE="NO"
 [ "$MODE" = "real" ] && ACK_VALUE="YES"
 
@@ -98,7 +87,7 @@ cat <<PLAN
 计划（apply=${APPLY}）
   repo             $REPO
   node             $NODE_BIN
-  mode             $MODE   (real 才会真的改 Lark；dry 完全不碰网络)
+  mode             $MODE   (real 才会真的改 Lark 系统状态；dry 完全不碰网络)
   listen           $HOST:$PORT
   focus seconds    $FOCUS_SECONDS
   state file       $STATE_FILE
@@ -109,8 +98,9 @@ cat <<PLAN
   mqtt topic       $MQTT_TOPIC
   keychain service $SERVICE
     shared_secret      $SECRET_STATUS
-    calendar_id        $CALENDAR_STATUS
-    user_access_token  $TOKEN_STATUS
+    system_status_id   $([ "$MODE" = real ] && echo 'reuse OAuth setup result' || echo 'not needed in dry mode')
+    user_open_id       $([ "$MODE" = real ] && echo 'reuse OAuth setup result' || echo 'not needed in dry mode')
+    tenant token       $TOKEN_STATUS
   plist 里不写任何密钥，只写 BRIDGE_ACK_REAL_LARK=$ACK_VALUE
 PLAN
 
@@ -120,10 +110,8 @@ if [ "$APPLY" -eq 0 ]; then
   exit 0
 fi
 
-case "$CALENDAR_STATUS" in MISSING*) alarm "首次安装必须提供 --calendar-id" ;; esac
-
 if [ "$MODE" = "real" ]; then
-  for ACCOUNT in app_id app_secret user_access_token refresh_token access_token_expires_at; do
+  for ACCOUNT in app_id app_secret user_open_id system_status_id; do
     keychain_has "$ACCOUNT" || alarm "钥匙串缺少 $ACCOUNT，请先运行 bridge/setup-lark-oauth.sh"
   done
 fi
@@ -135,14 +123,12 @@ if ! keychain_has shared_secret; then
   echo "  security find-generic-password -s $SERVICE -a shared_secret -w"
   unset NEW_SECRET
 fi
-[ -n "$CALENDAR_ID" ] && keychain_set calendar_id "$CALENDAR_ID"
-
 if [ "$MODE" = "fake" ]; then
-  printf '粘贴 user_access_token（不回显，回车结束）: '
+  printf '粘贴 tenant_access_token（不回显，回车结束）: '
   IFS= read -r -s LARK_TOKEN
   printf '\n'
   [ -n "$LARK_TOKEN" ] || alarm "token 为空"
-  keychain_set user_access_token "$LARK_TOKEN"
+  keychain_set tenant_access_token "$LARK_TOKEN"
   unset LARK_TOKEN
 fi
 
