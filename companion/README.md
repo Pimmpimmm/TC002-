@@ -6,6 +6,10 @@
 2. Focus bridge：按当前电脑用户的 Lark OAuth 凭据维护日历忙碌状态；
 3. MQTT adapter：只订阅配置的精确主题，把事件转交给本机 bridge。
 
+Lark 忙碌日程按公开可见方式创建（`visibility=public`）。是否能被某位同事
+看到，仍取决于该 Lark 日历本身的共享权限；日程标题“专注”和起止时间会随
+公开日程显示。
+
 Lark 的 access token、refresh token、App Secret 和共享密钥仍然只写入
 macOS 钥匙串，不写入 plist、配置文件或设备。
 
@@ -93,7 +97,9 @@ Token 只会写入本机 macOS 钥匙串。
 bash companion/install-macos.sh \
   --lan-host 192.0.2.100 \
   --mode real \
-  --calendar-id <本人的主日历ID>
+  --calendar-id <本人的主日历ID> \
+  --focus-seconds 2700 \
+  --rest-seconds 300
 ```
 
 如果没有使用 Homebrew，而是手动解压了 EMQX，再补上：
@@ -111,6 +117,8 @@ bash companion/install-macos.sh \
   --lan-host 192.0.2.100 \
   --mode real \
   --calendar-id <本人的主日历ID> \
+  --focus-seconds 2700 \
+  --rest-seconds 300 \
   --apply
 ```
 
@@ -133,7 +141,9 @@ bridge 和 Lark 不对局域网开放。
 ```bash
 npm run companion:configure-device -- \
   --adb-target 192.0.2.131:5555 \
-  --lan-host 192.0.2.100
+  --lan-host 192.0.2.100 \
+  --focus-seconds 2700 \
+  --rest-seconds 300
 ```
 
 其中 `--adb-target` 是时钟的地址，`--lan-host` 是电脑的地址。这个动作
@@ -144,12 +154,30 @@ npm run companion:configure-device -- \
 --remote-dir /tmp/ui
 ```
 
+### 自定义专注/休息时长
+
+时长由助手写入设备的 `device.conf`，不需要重新编译应用。单位是秒，允许
+`60..14400` 秒。安装助手时给 bridge 传同一个 `--focus-seconds`；配对时钟
+时再把 `--focus-seconds` 和 `--rest-seconds` 传给 `configure-device.sh`：
+
+```bash
+npm run companion:configure-device -- \
+  --adb-target <时钟IP:5555> \
+  --lan-host <电脑局域网IP> \
+  --focus-seconds 1500 \
+  --rest-seconds 600
+```
+
+这表示专注 25 分钟、休息 10 分钟。写完配置后重启时钟应用；电脑助手重新
+安装/加载时也要使用相同的 `--focus-seconds`，否则 Lark 的忙碌结束时间和
+设备倒计时会不一致。
+
 ### 第 7 步：验证
 
 1. 在电脑上确认三个 LaunchAgent 已加载；
 2. 重启电脑，确认 EMQX 和助手自动起来；
 3. 在时钟上按中键进入 Focus；
-4. 检查本人的 Lark 是否出现 45 分钟忙碌日程；
+4. 检查本人的 Lark 是否出现公开可见的忙碌日程；
 5. 提前退出，检查日程是否被删除；
 6. 关闭电脑，确认时钟仍能本地倒计时和播放声音。
 
