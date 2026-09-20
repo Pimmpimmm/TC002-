@@ -30,13 +30,17 @@ done
 command -v adb >/dev/null 2>&1 || alarm "找不到 adb"
 [ -n "$ADB_TARGET" ] || alarm "必须提供 --adb-target"
 case "$ADB_TARGET" in *:*) ;; *) ADB_TARGET="$ADB_TARGET:5555" ;; esac
+case "$ADB_TARGET" in *[!0-9.:]*) alarm "--adb-target 必须是 IPv4[:port]" ;; esac
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 [ -n "$BUNDLE" ] || BUNDLE="$REPO/device/TC002_Focus_Probe/TemporaryFocusRelease"
-[ -f "$BUNDLE/EasyUI.cfg" ] || alarm "找不到临时 bundle: $BUNDLE/EasyUI.cfg"
-[ -f "$BUNDLE/lib/libzkgui.so" ] || alarm "bundle 缺少 lib/libzkgui.so"
+bash "$REPO/companion/verify-runtime-bundle.sh" "$BUNDLE" >/dev/null
 
-adb connect "$ADB_TARGET" >/dev/null 2>&1 || true
-adb -s "$ADB_TARGET" wait-for-device
+CONNECT_OUTPUT="$(adb connect "$ADB_TARGET" 2>&1 || true)"
+case "$CONNECT_OUTPUT" in
+  *connected*|*already*) ;;
+  *) alarm "ADB 无法连接 $ADB_TARGET: $CONNECT_OUTPUT" ;;
+esac
+[ "$(adb -s "$ADB_TARGET" get-state 2>/dev/null || true)" = "device" ] || alarm "ADB 设备未就绪: $ADB_TARGET"
 adb -s "$ADB_TARGET" shell 'mkdir -p /tmp/ui/audio /tmp/lib /tmp/tr'
 adb -s "$ADB_TARGET" push "$BUNDLE/EasyUI.cfg" /tmp/EasyUI.cfg >/dev/null
 

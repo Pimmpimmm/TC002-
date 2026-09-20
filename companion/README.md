@@ -10,9 +10,9 @@
 “恢复原生界面”按钮只重启 TC002；临时程序在 `/tmp`，所以设备重启后会恢复原生
 页面，不会修改固件。Lark 密钥和 token 仍然只进 macOS 钥匙串。
 
-当前 GUI 是开发版，项目目录字段仍可见。正式批量分发时，把项目脚本和
-`device/TC002_Focus_Probe/TemporaryFocusRelease` 放进 App 的 Resources，并给 App
-做签名/公证即可隐藏这个字段。
+当前 GUI 是开发版，项目目录字段仍可见。`build-app.sh` 会先校验
+`device/TC002_Focus_Probe/TemporaryFocusRelease` 的 SHA-256 manifest，再把项目脚本
+和设备运行包放进 App Resources。正式对外分发前仍需给 App 签名和公证。
 
 这个目录是每个人电脑上的助手软件安装层。它把三项后台服务一起管理：
 
@@ -64,13 +64,14 @@ Homebrew 当前提供 macOS Apple Silicon 和 Intel 的 EMQX 安装包。这个�
 ## 从零安装流程
 
 以下步骤每个人的 Mac 都执行一次。
+推荐直接在项目根目录双击 `一键准备TC002.command`；下面保留手动步骤用于排查。
 
 ### 第 1 步：准备项目和 Node.js
 
 ```bash
 git clone <你的 GitHub 仓库地址>
 cd 时钟
-npm install
+npm ci
 ```
 
 如果电脑没有 Node.js 24 或更高版本，可以使用 Homebrew：

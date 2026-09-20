@@ -47,7 +47,7 @@ final class AppModel {
         }
         if hostIP.isEmpty { hostIP = detectHostIP() }
         if appID.isEmpty { appID = (try? Self.run("/usr/bin/security", args: ["find-generic-password", "-s", keychainService, "-a", "app_id", "-w"]))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
-        isAuthorized = hasKeychainValue(account: "access_token")
+        isAuthorized = ["app_id", "app_secret", "user_access_token", "refresh_token", "access_token_expires_at"].allSatisfy { hasKeychainValue(account: $0) }
         notify()
     }
 
@@ -73,7 +73,10 @@ final class AppModel {
         guard !deviceIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { status = "请填写时钟 IP"; notify(); return }
         guard !hostIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { status = "请填写电脑 IP"; notify(); return }
         guard !calendarID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { status = "请填写 Lark 日历 ID"; notify(); return }
+        guard isAuthorized else { status = "请先完成 Lark 授权"; notify(); return }
         guard FileManager.default.fileExists(atPath: repoPath + "/companion/install-macos.sh") else { status = "项目目录无效，找不到 companion/install-macos.sh"; notify(); return }
+        do { try Self.preflight(repo: repoPath) }
+        catch { status = "启动前检查失败：\(error.localizedDescription)"; appendLog(error.localizedDescription); notify(); return }
         save(); isBusy = true; status = "正在启动本机服务并连接时钟…"; appendLog("准备启动：专注 \(focus) 分钟，休息 \(rest) 分钟，设备 \(deviceIP)"); notify()
         let focusSeconds = focus * 60; let restSeconds = rest * 60; let repo = repoPath; let device = deviceIP.contains(":") ? deviceIP : deviceIP + ":5555"; let host = hostIP; let calendar = calendarID
         DispatchQueue.global(qos: .userInitiated).async {
@@ -135,6 +138,28 @@ final class AppModel {
         var environment = ProcessInfo.processInfo.environment; environment["PATH"] = toolPath(); process.environment = environment
         let pipe = Pipe(); process.standardOutput = pipe; process.standardError = pipe; try process.run(); let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""; process.waitUntilExit()
         guard process.terminationStatus == 0 else { throw RunnerError.failed(output.isEmpty ? "命令退出码：\(process.terminationStatus)" : output) }; return output
+    }
+    private static func preflight(repo: String) throws {
+        let required = [
+            "companion/install-macos.sh",
+            "companion/configure-device.sh",
+            "companion/start-focus.sh",
+            "companion/verify-runtime-bundle.sh",
+            "device/TC002_Focus_Probe/TemporaryFocusRelease/EasyUI.cfg",
+            "device/TC002_Focus_Probe/TemporaryFocusRelease/lib/libzkgui.so",
+            "device/TC002_Focus_Probe/TemporaryFocusRelease/ui/audio/focus_done.mp3"
+        ]
+        for relative in required where !FileManager.default.fileExists(atPath: repo + "/" + relative) {
+            throw RunnerError.failed("发布包不完整，缺少 \(relative)")
+        }
+        let node = nodePath()
+        let nodeArgs = node == "/usr/bin/env" ? ["node", "-p", "process.versions.node.split('.')[0]"] : ["-p", "process.versions.node.split('.')[0]"]
+        let nodeMajor = Int(try run(node, args: nodeArgs).trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+        guard nodeMajor >= 24 else { throw RunnerError.failed("需要 Node.js 24 或更高版本") }
+        let adb = adbPath()
+        _ = try run(adb, args: adb == "/usr/bin/env" ? ["adb", "version"] : ["version"])
+        _ = try run("/usr/bin/env", args: ["brew", "--prefix", "emqx"])
+        _ = try run("/bin/bash", args: [repo + "/companion/verify-runtime-bundle.sh"], cwd: repo)
     }
     private static func adbPath() -> String { ["/opt/homebrew/bin/adb", "/usr/local/bin/adb", "/usr/bin/adb"].first { FileManager.default.isExecutableFile(atPath: $0) } ?? "/usr/bin/env" }
     private static func nodePath() -> String { ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node"].first { FileManager.default.isExecutableFile(atPath: $0) } ?? "/usr/bin/env" }

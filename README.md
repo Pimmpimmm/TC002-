@@ -32,7 +32,23 @@ App Secret 和共享密钥只写入当前用户的 macOS 钥匙串，不写进�
 - [TC002 设备端说明](device/TC002_Focus_Probe/README_FOCUS.md)
 - [交给其他 Agent 执行下载/安装的提示词](AGENT_DOWNLOAD_PROMPT.md)
 
-## 快速安装（每个人的 Mac 都执行一次）
+## 新 Mac 推荐入口
+
+先安装 [Homebrew](https://brew.sh) 和 Apple 命令行工具（`xcode-select --install`），
+然后克隆仓库，在 Finder 中双击 `一键准备TC002.command`，或运行：
+
+```bash
+bash bootstrap-macos.sh --apply
+```
+
+该入口会安装/升级 Node.js、EMQX 和 ADB，执行自动测试与发布包校验，
+构建并打开 TC002 Focus Companion。用户只需在 App 内完成 Lark 授权、
+填写设备 IP 并点击“启动专注时钟”。Lark 授权必须由用户本人在浏览器确认。
+
+当前安全部署模式为临时部署：不刷固件，TC002 重启后恢复原生界面。
+新设备需要先在设备上开启 Wi-Fi ADB。
+
+## 手动安装（排查时使用）
 
 ### 1. 安装依赖
 
@@ -53,7 +69,7 @@ EMQX 的 macOS 安装包由 Homebrew 提供。不要使用 Linux 的
 ```bash
 git clone <这个仓库的地址>
 cd 时钟
-npm install
+npm ci
 ```
 
 ### 3. 登录自己的 Lark

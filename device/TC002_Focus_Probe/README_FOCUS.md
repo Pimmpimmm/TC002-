@@ -67,13 +67,15 @@ inside an x86_64 Linux VM/container when these paths are mounted:
 - official toolchain: `/toolchain`
 - downloaded FlyThings packages: `/packages`
 
-The result is an ADB debug bundle in `ManualRelease`. The script deliberately
+The default result is a temporary ADB debug bundle in `TemporaryFocusRelease`,
+with `/tmp` runtime paths and a SHA-256 manifest. Set `BUILD_DIR` and
+`DEPLOY_DIR=/mnt/extsd` explicitly only when preparing a separately reviewed
+persistent-layout bundle. The script deliberately
 includes only the two required activities and excludes the demo's audio, BLE,
 RGB and Wi-Fi test modules. It also supplies the `__PLATFORM_Z21__` define that
 the official IDE normally injects automatically.
 
-## Deliberately not included yet
-
-This first probe does not implement the countdown screen, persistence, rest
-state or alarm. Those should be added only after the physical key and MQTT path
-have been verified on the real device.
+The checked-in `TemporaryFocusRelease` is the tested deployment artifact used by
+the macOS GUI. `companion/verify-runtime-bundle.sh` validates it before any ADB
+write. Persistent firmware installation remains intentionally unsupported until
+recovery has been validated on a separate physical device.

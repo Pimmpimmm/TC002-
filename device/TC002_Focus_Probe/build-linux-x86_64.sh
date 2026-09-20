@@ -6,8 +6,8 @@ set -euo pipefail
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "$0")" && pwd)}"
 TOOLCHAIN_ROOT="${TOOLCHAIN_ROOT:-/toolchain}"
 PACKAGES_ROOT="${PACKAGES_ROOT:-/packages}"
-BUILD_DIR="${BUILD_DIR:-$PROJECT_DIR/ManualRelease}"
-DEPLOY_DIR="${DEPLOY_DIR:-/mnt/extsd}"
+BUILD_DIR="${BUILD_DIR:-$PROJECT_DIR/TemporaryFocusRelease}"
+DEPLOY_DIR="${DEPLOY_DIR:-/tmp}"
 ONLY_SOURCE="${ONLY_SOURCE:-}"
 
 if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "x86_64" ]]; then
@@ -84,6 +84,14 @@ SOURCES=(
   src/utils/Surface.cpp
 )
 
+case "$BUILD_DIR" in
+  ""|"/"|"$PROJECT_DIR")
+    echo "Unsafe BUILD_DIR: $BUILD_DIR" >&2
+    exit 2
+    ;;
+esac
+rm -rf "$BUILD_DIR/obj" "$BUILD_DIR/lib" "$BUILD_DIR/ui"
+rm -f "$BUILD_DIR/EasyUI.cfg" "$BUILD_DIR/MANIFEST.sha256"
 mkdir -p "$BUILD_DIR/obj" "$BUILD_DIR/lib" "$BUILD_DIR/ui/audio"
 
 OBJECTS=()
@@ -129,7 +137,7 @@ echo "LINK libzkgui.so"
   -pthread -ldl -lrt -lm
 
 cp "$PROJECT_DIR/ui/main.ftu" "$PROJECT_DIR/ui/btnTest.ftu" "$BUILD_DIR/ui/"
-cp "$PROJECT_DIR/ui/audio/focus_done.wav" "$BUILD_DIR/ui/audio/"
+cp "$PROJECT_DIR/ui/audio/focus_done.mp3" "$BUILD_DIR/ui/audio/"
 cp "$EASYUI/lib/libeasyui.so" "$LOG/lib/liblog.so" \
   "$ZKHARDWARE/lib/libzkhardware.so" "$ZKNET/lib/libzknet.so" \
   "$BUILD_DIR/lib/"
@@ -139,6 +147,11 @@ cp "$MIAO/lib/libmi_ao.so" "$MICOMMON/lib/libmi_common.so" \
   "$BUILD_DIR/lib/"
 
 printf '%s\n' "{\"baud\":\"115200\",\"defBrightness\":-1,\"languageCode\":\"zh_CN\",\"languagePath\":\"$DEPLOY_DIR/tr/\",\"resPath\":\"$DEPLOY_DIR/ui/\",\"rotateScreen\":0,\"rotateTouch\":0,\"screensaverTimeOut\":-1,\"startupLibPath\":\"$DEPLOY_DIR/lib/libzkgui.so\",\"startupTouchCalib\":false,\"touchDev\":\"/dev/input/event0\",\"uart\":\"ttyS1\",\"zkdebug\":false}" > "$BUILD_DIR/EasyUI.cfg"
+
+(
+  cd "$BUILD_DIR"
+  find EasyUI.cfg lib ui -type f -print0 | sort -z | xargs -0 sha256sum > MANIFEST.sha256
+)
 
 echo "Built: $BUILD_DIR/lib/libzkgui.so"
 echo "Debug bundle: $BUILD_DIR"

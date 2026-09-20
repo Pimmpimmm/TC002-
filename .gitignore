@@ -13,5 +13,19 @@ device/TC002_Focus_Probe/Backup/
 device/TC002_Focus_Probe/Recovery/
 device/TC002_Focus_Probe/PersistentRelease/
 device/TC002_Focus_Probe/Temporary*
+# The minimal, tested runtime bundle is a release input, not a build cache.
+# Keep object files and unused audio ignored while allowing a fresh clone to deploy.
+!device/TC002_Focus_Probe/TemporaryFocusRelease/
+device/TC002_Focus_Probe/TemporaryFocusRelease/*
+!device/TC002_Focus_Probe/TemporaryFocusRelease/EasyUI.cfg
+!device/TC002_Focus_Probe/TemporaryFocusRelease/MANIFEST.sha256
+!device/TC002_Focus_Probe/TemporaryFocusRelease/lib/
+!device/TC002_Focus_Probe/TemporaryFocusRelease/lib/*.so
+!device/TC002_Focus_Probe/TemporaryFocusRelease/ui/
+device/TC002_Focus_Probe/TemporaryFocusRelease/ui/*
+!device/TC002_Focus_Probe/TemporaryFocusRelease/ui/*.ftu
+!device/TC002_Focus_Probe/TemporaryFocusRelease/ui/audio/
+device/TC002_Focus_Probe/TemporaryFocusRelease/ui/audio/*
+!device/TC002_Focus_Probe/TemporaryFocusRelease/ui/audio/focus_done.mp3
 device/TC002_Focus_Probe/ManualRelease/
 device/TC002_Focus_Probe/*.img

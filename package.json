@@ -7,7 +7,10 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test probes/*.test.mjs bridge/*.test.mjs",
+    "test": "node --test probes/*.test.mjs bridge/*.test.mjs companion/*.test.mjs",
+    "verify:bundle": "bash companion/verify-runtime-bundle.sh",
+    "verify:portable": "bash ci/verify-portability.sh",
+    "bootstrap:macos": "bash bootstrap-macos.sh",
     "probe:discover": "node probes/tc002-discover.mjs",
     "probe:broker:install": "node probes/install-broker-runtime.mjs",
     "probe:broker": "node probes/tc002-broker.mjs",

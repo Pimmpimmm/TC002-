@@ -111,6 +111,13 @@ PLAN
 }
 
 [ -f "$TEMPLATE" ] || alarm "缺少 EMQX plist 模板: $TEMPLATE"
+if [ "$MODE" = "real" ]; then
+  [ -x /usr/bin/security ] || alarm "找不到 macOS Keychain 工具"
+  for ACCOUNT in app_id app_secret user_access_token refresh_token access_token_expires_at; do
+    /usr/bin/security find-generic-password -s tc002-focus-bridge -a "$ACCOUNT" -w >/dev/null 2>&1 || \
+      alarm "钥匙串缺少 $ACCOUNT，请先完成 Lark 授权"
+  done
+fi
 mkdir -p "$SUPPORT_DIR" "$DATA_DIR" "$LOG_DIR" "$PLIST_DIR"
 chmod 700 "$SUPPORT_DIR" "$DATA_DIR"
 

@@ -4,8 +4,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_DIR="$ROOT/mac-app/dist/TC002FocusCompanion.app"
 BUILD_DIR="$(mktemp -d /tmp/tc002-focus-swift.XXXXXX)"
+cleanup() { rm -rf "$BUILD_DIR"; }
+trap cleanup EXIT
 SDK="$(xcrun --sdk macosx --show-sdk-path)"
 SWIFTC="$(xcrun --find swiftc)"
+
+bash "$ROOT/companion/verify-runtime-bundle.sh" >/dev/null
 
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources/tc002-repo/device/TC002_Focus_Probe"
