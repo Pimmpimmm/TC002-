@@ -60,6 +60,8 @@ private:
 	int64_t mStartedAt;
 	int64_t mFocusDeadline;
 	int64_t mPhaseDeadlineMonotonicMs;
+	int64_t mFocusSeconds;
+	int64_t mRestSeconds;
 	int64_t mLastActionMs;
 	uint32_t mSessionCounter;
 	std::string mSessionId;
