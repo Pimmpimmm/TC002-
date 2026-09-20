@@ -7,7 +7,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>__EMQX_BIN__</string>
-    <string>console</string>
+    <string>foreground</string>
   </array>
   <key>WorkingDirectory</key>
   <string>__EMQX_HOME__</string>
