@@ -11,11 +11,17 @@ official `Z21_TC002_Demo` (GPL-3.0-or-later).
   `reason=rotate_away`.
 - Network work runs on a worker thread; the key/UI thread never waits for MQTT.
 - Failed MQTT events remain ordered in a small in-memory retry queue.
+- Focus and rest completion stop on a red prompt (`该休息了` / `该工作了`);
+  the middle button is required to enter the next phase.
+- READY is white, FOCUS is green, and REST is blue. The countdown does not
+  flash red near its end.
 - Rotating switches between the focus READY page and a stock-font UTC+8
   `HH:MM:SS` page; pressing the middle button on the time page starts focus.
-- A naturally completed focus round plays `ui/audio/focus_done.wav` once at
-  volume level 3. Replace that file to change the music without changing code.
-  The right hardware button previews it; the left hardware button stops it.
+- A naturally completed focus or rest round plays `ui/audio/focus_done.mp3`
+  in loop mode until the middle button is pressed. Replace that file to change
+  the music without changing code.
+- While on the focus page, the left and right top buttons decrease/increase
+  volume from 0 to 6 and briefly show a native-style volume overlay.
 
 Default broker fallback: `192.0.2.100:1883` (documentation-only; use `device.conf`)
 
@@ -35,7 +41,7 @@ rest_seconds=300
 
 This keeps the same binary usable with every user's local EMQX; the computer's
 companion installer only needs to write that small per-device config file. The two
-timer values accept `60..14400` seconds and take effect after restarting the app.
+timer values accept `1..14400` seconds and take effect after restarting the app.
 
 No Lark token, MQTT password, message text, user identity, device serial or MAC
 is embedded in the application.

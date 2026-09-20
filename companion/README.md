@@ -1,5 +1,19 @@
 # Ulanzi Focus Companion（macOS 第一版）
 
+## 统一 GUI 入口
+
+`../mac-app` 提供了一个原生 macOS 前端。日常使用时，用户只需要在窗口中填写
+时钟 IP、本人 Lark 信息和专注/休息时长，然后点击“启动专注时钟”。GUI 会依次
+调用本目录的安装器、`configure-device.sh` 和 `start-focus.sh`，不需要用户手动
+打开 EMQX 或输入 ADB 命令。
+
+“恢复原生界面”按钮只重启 TC002；临时程序在 `/tmp`，所以设备重启后会恢复原生
+页面，不会修改固件。Lark 密钥和 token 仍然只进 macOS 钥匙串。
+
+当前 GUI 是开发版，项目目录字段仍可见。正式批量分发时，把项目脚本和
+`device/TC002_Focus_Probe/TemporaryFocusRelease` 放进 App 的 Resources，并给 App
+做签名/公证即可隐藏这个字段。
+
 这个目录是每个人电脑上的助手软件安装层。它把三项后台服务一起管理：
 
 1. 本机 EMQX：接收同一局域网内 TC002 发来的 MQTT 事件；

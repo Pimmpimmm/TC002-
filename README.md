@@ -27,6 +27,7 @@ App Secret 和共享密钥只写入当前用户的 macOS 钥匙串，不写进�
 
 ## 先看这两份说明
 
+- [macOS 统一 GUI 入口](mac-app/README.md)
 - [macOS 助手完整安装步骤](companion/README.md)
 - [TC002 设备端说明](device/TC002_Focus_Probe/README_FOCUS.md)
 - [交给其他 Agent 执行下载/安装的提示词](AGENT_DOWNLOAD_PROMPT.md)

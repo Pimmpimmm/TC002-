@@ -3,6 +3,10 @@ Claude outputs/
 probes/.runtime/
 node_modules/
 
+# macOS GUI build intermediates and locally assembled app bundles.
+mac-app/.build/
+mac-app/dist/
+
 # Local secrets, device captures and generated firmware/build outputs.
 support/
 device/TC002_Focus_Probe/Backup/

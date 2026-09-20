@@ -12,13 +12,17 @@
 enum class FocusPhase {
 	READY,
 	FOCUS,
-	REST
+	REST,
+	FOCUS_DONE,
+	REST_DONE
 };
 
 struct FocusSnapshot {
 	FocusPhase phase;
 	int remainingSeconds;
 	int totalSeconds;
+	int volumeLevel;
+	bool volumeVisible;
 };
 
 class FocusController {
@@ -62,6 +66,8 @@ private:
 	int64_t mPhaseDeadlineMonotonicMs;
 	int64_t mFocusSeconds;
 	int64_t mRestSeconds;
+	int mVolumeLevel;
+	int64_t mVolumeOverlayUntilMs;
 	int64_t mLastActionMs;
 	uint32_t mSessionCounter;
 	std::string mSessionId;

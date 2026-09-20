@@ -10,10 +10,10 @@ namespace {
 
 const Color COLOR_BLACK(0, 0, 0);
 const Color COLOR_DIM(18, 18, 18);
-const Color COLOR_READY(50, 130, 255);
+const Color COLOR_READY(255, 255, 255);
 const Color COLOR_FOCUS(40, 230, 110);
-const Color COLOR_REST(255, 180, 45);
-const Color COLOR_WARNING(255, 70, 35);
+const Color COLOR_REST(40, 120, 255);
+const Color COLOR_ALERT(255, 40, 40);
 const Color COLOR_TEXT(225, 235, 255);
 
 const uint8_t DIGITS[10][7] = {
@@ -28,6 +28,16 @@ const uint8_t DIGITS[10][7] = {
 	{0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E},
 	{0x0E, 0x11, 0x11, 0x0F, 0x01, 0x01, 0x0E}
 };
+
+// Six compact 7x9 glyphs used for the two completion prompts. The stock
+// TomThumb font is ASCII-only, so these are drawn directly on the 52x16 LED
+// matrix instead of attempting to render UTF-8 bytes as individual glyphs.
+const uint8_t GLYPH_GAI[9] = {0x1C, 0x08, 0x7F, 0x08, 0x14, 0x22, 0x41, 0x14, 0x08};
+const uint8_t GLYPH_XIU[9] = {0x14, 0x14, 0x7F, 0x14, 0x3E, 0x14, 0x14, 0x22, 0x41};
+const uint8_t GLYPH_XI[9]  = {0x3E, 0x22, 0x3E, 0x08, 0x7F, 0x14, 0x22, 0x41, 0x3E};
+const uint8_t GLYPH_LE[9]  = {0x7E, 0x02, 0x04, 0x08, 0x10, 0x20, 0x20, 0x20, 0x7F};
+const uint8_t GLYPH_GONG[9] = {0x7F, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x7F};
+const uint8_t GLYPH_ZUO[9] = {0x14, 0x14, 0x7F, 0x14, 0x1C, 0x14, 0x22, 0x41, 0x00};
 
 } // namespace
 
@@ -47,31 +57,80 @@ void FocusPage::onExit() {
 
 bool FocusPage::onKeyEvent(int keyCode, int keyStatus) {
 	const bool rotation = keyCode == E_KEYCODE_CLOCKWISE || keyCode == E_KEYCODE_ANTI_CLOCKWISE;
-	if ((keyCode == E_KEYCODE_MIDDLE_BUTTON && keyStatus == 1) || rotation) draw();
+	const bool volume = (keyCode == E_KEYCODE_LEFT_BUTTON || keyCode == E_KEYCODE_RIGHT_BUTTON)
+		&& keyStatus == 1;
+	if ((keyCode == E_KEYCODE_MIDDLE_BUTTON && keyStatus == 1) || rotation || volume) draw();
 	return false;
 }
 
 void FocusPage::draw() {
 	const FocusSnapshot state = FocusController::getInstance().snapshot();
 	Surface surface(52, 16, COLOR_BLACK);
-	Color accent = state.phase == FocusPhase::FOCUS ? COLOR_FOCUS
-		: (state.phase == FocusPhase::REST ? COLOR_REST : COLOR_READY);
-	if (state.phase != FocusPhase::READY && state.remainingSeconds <= 30) accent = COLOR_WARNING;
+	Color accent = COLOR_READY;
+	if (state.phase == FocusPhase::FOCUS) accent = COLOR_FOCUS;
+	else if (state.phase == FocusPhase::REST) accent = COLOR_REST;
+	else if (state.phase == FocusPhase::FOCUS_DONE || state.phase == FocusPhase::REST_DONE) accent = COLOR_ALERT;
 
-	drawModeIcon(surface, accent, state.phase);
-	drawCountdown(surface, state.remainingSeconds,
-		state.phase == FocusPhase::READY ? COLOR_TEXT : accent);
+	if (state.volumeVisible) {
+		drawVolumeOverlay(surface, state.volumeLevel);
+	} else if (state.phase == FocusPhase::FOCUS_DONE || state.phase == FocusPhase::REST_DONE) {
+		drawPrompt(surface, state.phase == FocusPhase::FOCUS_DONE);
+	} else {
+		drawModeIcon(surface, accent, state.phase);
+		drawCountdown(surface, state.remainingSeconds, accent);
 
-	const char* label = state.phase == FocusPhase::FOCUS ? "FOCUS"
-		: (state.phase == FocusPhase::REST ? "REST" : "READY");
-	Painter& painter = Painter::getInstance();
-	const int labelWidth = painter.getTextWidth(label, 1);
-	painter.drawText(surface, 33 - labelWidth / 2, 14, label, accent, 1);
-	drawProgress(surface, state.remainingSeconds, state.totalSeconds, accent);
+		const char* label = state.phase == FocusPhase::FOCUS ? "FOCUS"
+			: (state.phase == FocusPhase::REST ? "REST" : "READY");
+		Painter& painter = Painter::getInstance();
+		const int labelWidth = painter.getTextWidth(label, 1);
+		painter.drawText(surface, 33 - labelWidth / 2, 14, label, accent, 1);
+		drawProgress(surface, state.remainingSeconds, state.totalSeconds, accent);
+	}
 
 	std::vector<uint8_t> data;
 	surface.extractRGB(data);
 	sendLedData(data);
+}
+
+void FocusPage::drawVolumeOverlay(Surface& surface, int volumeLevel) {
+	Painter& painter = Painter::getInstance();
+	const Color COLOR_BAR(70, 70, 70);
+	painter.drawText(surface, 0, 4, "VOL", COLOR_READY, 0);
+	const int barX = 17;
+	const int barY = 3;
+	const int barW = 34;
+	const int barH = 8;
+	painter.drawRect(surface, barX, barY, barW, barH, COLOR_BAR, false);
+	for (int index = 0; index < 6; ++index) {
+		const int segmentX = barX + 2 + index * 5;
+		const Color& color = index < volumeLevel ? COLOR_READY : COLOR_DIM;
+		painter.drawRect(surface, segmentX, barY + 2, 4, 4, color, true);
+	}
+}
+
+void FocusPage::drawPrompt(Surface& surface, bool focusCompleted) {
+	static const uint8_t* const restPrompt[] = {
+		GLYPH_GAI, GLYPH_XIU, GLYPH_XI, GLYPH_LE
+	};
+	static const uint8_t* const workPrompt[] = {
+		GLYPH_GAI, GLYPH_GONG, GLYPH_ZUO, GLYPH_LE
+	};
+	const uint8_t* const* glyphs = focusCompleted ? restPrompt : workPrompt;
+	const int glyphCount = 4;
+	const int glyphWidth = 7;
+	const int gap = 2;
+	const int totalWidth = glyphCount * glyphWidth + (glyphCount - 1) * gap;
+	const int startX = (52 - totalWidth) / 2;
+	for (int index = 0; index < glyphCount; ++index) {
+		for (int row = 0; row < 9; ++row) {
+			for (int column = 0; column < glyphWidth; ++column) {
+				if (glyphs[index][row] & (1 << (glyphWidth - 1 - column))) {
+					Painter::getInstance().drawPixel(surface,
+						startX + index * (glyphWidth + gap) + column, 3 + row, COLOR_ALERT);
+				}
+			}
+		}
+	}
 }
 
 void FocusPage::drawModeIcon(Surface& surface, const Color& color, FocusPhase phase) {

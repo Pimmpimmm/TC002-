@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { createServer } from 'node:http';
+import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { readKeychainSecret } from './lib/keychain.mjs';
@@ -55,7 +56,13 @@ export async function runOAuth({
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });
   const timer = setTimeout(() => finish.reject(new Error('ALARM OAuth timed out after 5 minutes')), timeoutMs);
   log('\n请在浏览器打开下面的 Lark 授权链接：\n');
-  log(authorizationUrl({ appId, redirectUri, state }));
+  const url = authorizationUrl({ appId, redirectUri, state });
+  log(url);
+  if (process.env.TC002_OPEN_BROWSER === '1') {
+    const opener = process.platform === 'darwin' ? 'open' : 'xdg-open';
+    const browser = spawn(opener, [url], { detached: true, stdio: 'ignore' });
+    browser.unref();
+  }
   log('\n授权后浏览器会自动返回本机。请不要关闭这个终端窗口。\n');
   try {
     await completed;

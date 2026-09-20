@@ -17,6 +17,8 @@ public:
 
 private:
 	void drawModeIcon(Surface& surface, const Color& color, FocusPhase phase);
+	void drawPrompt(Surface& surface, bool focusCompleted);
+	void drawVolumeOverlay(Surface& surface, int volumeLevel);
 	void drawCountdown(Surface& surface, int seconds, const Color& color);
 	void drawDigit(Surface& surface, int x, int y, int digit, const Color& color);
 	void drawProgress(Surface& surface, int remaining, int total, const Color& color);

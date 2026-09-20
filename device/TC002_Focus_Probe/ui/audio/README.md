@@ -1,12 +1,10 @@
 # Focus completion music
 
-Replace `focus_done.wav` to change the sound played when a 45-minute focus
-round finishes naturally.
+Replace `focus_done.mp3` to change the sound played when a focus or rest round
+finishes naturally.
 
-- Keep the exact filename `focus_done.wav`.
-- Use a standard PCM WAV file (48 kHz, 16-bit is the safest choice on TC002).
-- The current TC002 EasyUI media player rejects the stock MP3 prompt files, so
-  this build intentionally uses WAV for reliable playback.
-- Playback starts once; it is stopped when the next focus round starts, when
-  the cycle is exited, or when the left hardware button is pressed.
-- The right hardware button previews the current file without changing Lark.
+- Keep the exact filename `focus_done.mp3`.
+- The bundled file is the selected Morning Joy alarm sound.
+- Playback loops until the middle button starts the next phase or rotation
+  exits the cycle.
+- The top left/right buttons lower/raise volume and show a short volume overlay.

@@ -3,6 +3,7 @@
 #include "managers/AudioManager.h"
 #include "managers/KeyManager.h"
 
+#include <base/base.h>
 #include <base/log.h>
 #include <chrono>
 #include <sstream>
@@ -38,6 +39,7 @@ FocusController::FocusController()
 	: mRunning(false), mPhase(FocusPhase::READY), mAudioCommand(AudioCommand::NONE),
 	  mStartedAt(0), mFocusDeadline(0), mPhaseDeadlineMonotonicMs(0),
 	  mFocusSeconds(focus_config::kFocusSeconds), mRestSeconds(focus_config::kRestSeconds),
+	  mVolumeLevel(focus_config::kFocusDoneAudioVolume), mVolumeOverlayUntilMs(0),
 	  mLastActionMs(0), mSessionCounter(0) {
 }
 
@@ -89,11 +91,13 @@ FocusSnapshot FocusController::snapshot() const {
 		? static_cast<int>(mRestSeconds)
 		: static_cast<int>(mFocusSeconds);
 	int remaining = total;
-	if (mPhase != FocusPhase::READY) {
+	if (mPhase == FocusPhase::FOCUS || mPhase == FocusPhase::REST) {
 		const int64_t remainingMs = mPhaseDeadlineMonotonicMs - nowMs;
 		remaining = remainingMs > 0 ? static_cast<int>((remainingMs + 999) / 1000) : 0;
+	} else if (mPhase == FocusPhase::FOCUS_DONE || mPhase == FocusPhase::REST_DONE) {
+		remaining = 0;
 	}
-	return {mPhase, remaining, total};
+	return {mPhase, remaining, total, mVolumeLevel, nowMs < mVolumeOverlayUntilMs};
 }
 
 void FocusController::onKeyEvent(int keyCode, int keyStatus) {
@@ -107,25 +111,30 @@ void FocusController::onKeyEvent(int keyCode, int keyStatus) {
 	if (!isRotation && nowMs - mLastActionMs < 300) return;
 	mLastActionMs = nowMs;
 	if (keyCode == E_KEYCODE_RIGHT_BUTTON) {
-		requestAudio(AudioCommand::PLAY_FOCUS_DONE);
-		LOGI_TRACE("FocusProbe: focus completion audio preview requested");
+		if (mVolumeLevel < 6) ++mVolumeLevel;
+		mVolumeOverlayUntilMs = nowMs + 1500;
+		awtrix::AudioManager::getInstance().setVolume(mVolumeLevel);
+		LOGI_TRACE("FocusProbe: volume increased to %d", mVolumeLevel);
 		return;
 	}
 	if (keyCode == E_KEYCODE_LEFT_BUTTON) {
-		requestAudio(AudioCommand::STOP);
-		LOGI_TRACE("FocusProbe: audio stop requested");
+		if (mVolumeLevel > 0) --mVolumeLevel;
+		mVolumeOverlayUntilMs = nowMs + 1500;
+		awtrix::AudioManager::getInstance().setVolume(mVolumeLevel);
+		LOGI_TRACE("FocusProbe: volume decreased to %d", mVolumeLevel);
 		return;
 	}
 	if (isRotation) {
 		if (mPhase != FocusPhase::READY) stopCycle("rotate_away");
 		return;
 	}
-	if (mPhase == FocusPhase::FOCUS) beginRest("middle_press");
+	if (mPhase == FocusPhase::FOCUS || mPhase == FocusPhase::FOCUS_DONE) beginRest("middle_press");
 	else beginFocus(epochSeconds());
 }
 
 void FocusController::beginFocus(int64_t now) {
 	requestAudio(AudioCommand::STOP);
+	mVolumeOverlayUntilMs = 0;
 	mPhase = FocusPhase::FOCUS;
 	mStartedAt = now;
 	mFocusDeadline = now + mFocusSeconds;
@@ -139,6 +148,7 @@ void FocusController::beginFocus(int64_t now) {
 
 void FocusController::beginRest(const char* reason) {
 	requestAudio(AudioCommand::STOP);
+	mVolumeOverlayUntilMs = 0;
 	enqueue(makeEnvelope(mSessionId, "stop", "REST", reason, mStartedAt, mFocusDeadline));
 	mPhase = FocusPhase::REST;
 	mPhaseDeadlineMonotonicMs = monotonicMs() + mRestSeconds * 1000;
@@ -148,6 +158,7 @@ void FocusController::beginRest(const char* reason) {
 
 void FocusController::stopCycle(const char* reason) {
 	requestAudio(AudioCommand::STOP);
+	mVolumeOverlayUntilMs = 0;
 	if (mPhase == FocusPhase::FOCUS) {
 		enqueue(makeEnvelope(mSessionId, "stop", "IDLE", reason, mStartedAt, mFocusDeadline));
 	}
@@ -175,18 +186,21 @@ void FocusController::workerLoop() {
 	while (true) {
 		std::string payload;
 		AudioCommand audioCommand = AudioCommand::NONE;
+		int audioVolume = focus_config::kFocusDoneAudioVolume;
 		{
 			std::unique_lock<std::mutex> lock(mMutex);
 			while (mRunning) {
 				const int64_t nowMs = monotonicMs();
 				if (mPhase == FocusPhase::FOCUS && nowMs >= mPhaseDeadlineMonotonicMs) {
-					mPhase = FocusPhase::REST;
-					mPhaseDeadlineMonotonicMs = nowMs + mRestSeconds * 1000;
+					mPhase = FocusPhase::FOCUS_DONE;
+					mPhaseDeadlineMonotonicMs = 0;
 					requestAudio(AudioCommand::PLAY_FOCUS_DONE);
-					LOGI_TRACE("FocusProbe: focus completed; rest started automatically");
+					LOGI_TRACE("FocusProbe: focus completed; waiting for middle press to start rest");
 				} else if (mPhase == FocusPhase::REST && nowMs >= mPhaseDeadlineMonotonicMs) {
-					beginFocus(epochSeconds());
-					LOGI_TRACE("FocusProbe: rest completed; next focus started automatically");
+					mPhase = FocusPhase::REST_DONE;
+					mPhaseDeadlineMonotonicMs = 0;
+					requestAudio(AudioCommand::PLAY_FOCUS_DONE);
+					LOGI_TRACE("FocusProbe: rest completed; waiting for middle press to start focus");
 				}
 				if (mAudioCommand != AudioCommand::NONE) {
 					audioCommand = mAudioCommand;
@@ -194,7 +208,7 @@ void FocusController::workerLoop() {
 					break;
 				}
 				if (!mQueue.empty()) break;
-				if (mPhase != FocusPhase::READY) {
+				if (mPhase == FocusPhase::FOCUS || mPhase == FocusPhase::REST) {
 					const int64_t waitMs = mPhaseDeadlineMonotonicMs - monotonicMs();
 					mCondition.wait_for(lock, std::chrono::milliseconds(waitMs > 0 ? waitMs : 1));
 				} else {
@@ -202,12 +216,17 @@ void FocusController::workerLoop() {
 				}
 			}
 			if (!mRunning) return;
+			if (audioCommand == AudioCommand::PLAY_FOCUS_DONE) audioVolume = mVolumeLevel;
 			if (audioCommand == AudioCommand::NONE) payload = mQueue.front();
 		}
 		if (audioCommand == AudioCommand::PLAY_FOCUS_DONE) {
-			awtrix::AudioManager::getInstance().setVolume(focus_config::kFocusDoneAudioVolume);
-			awtrix::AudioManager::getInstance().playAudio(focus_config::kFocusDoneAudioPath);
-			LOGI_TRACE("FocusProbe: focus completion audio started");
+			awtrix::AudioManager::getInstance().setVolume(audioVolume);
+			LOGI_TRACE("FocusProbe: playing completion audio path=%s exists=%d volume=%d",
+				focus_config::kFocusDoneAudioPath,
+				base::exists(focus_config::kFocusDoneAudioPath) ? 1 : 0,
+				audioVolume);
+			awtrix::AudioManager::getInstance().playAudio(focus_config::kFocusDoneAudioPath, true);
+			LOGI_TRACE("FocusProbe: completion audio started in loop mode");
 			continue;
 		}
 		if (audioCommand == AudioCommand::STOP) {

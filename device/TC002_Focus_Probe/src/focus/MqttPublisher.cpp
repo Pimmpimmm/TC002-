@@ -77,7 +77,7 @@ bool parseSeconds(const std::string& value, int64_t& seconds) {
 		parsed = parsed * 10 + static_cast<int64_t>(digit - '0');
 		if (parsed > 14400) return false;
 	}
-	if (parsed < 60) return false;
+	if (parsed < 1) return false;
 	seconds = parsed;
 	return true;
 }

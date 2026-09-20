@@ -11,7 +11,7 @@ public:
 	static AudioManager& getInstance();
 	AudioManager(AudioManager&) = delete;
 	AudioManager& operator=(AudioManager&) = delete;
-	void playAudio(const std::string& path);
+	void playAudio(const std::string& path, bool loop = false);
 	void stopAudio();
 	void pauseAudio();
 	void resumeAudio();

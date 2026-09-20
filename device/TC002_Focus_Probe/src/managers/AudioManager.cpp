@@ -16,8 +16,12 @@ void AudioManager::stopAudio() {
 	pPlayer->stop();
 }
 
-void AudioManager::playAudio(const std::string& path) {
-	pPlayer->play(path);
+void AudioManager::playAudio(const std::string& path, bool loop) {
+	if (loop) {
+		pPlayer->play(path, "", 5000, base::MediaPlayer::PlayMode::Loop);
+	} else {
+		pPlayer->play(path);
+	}
 }
 
 void AudioManager::pauseAudio() {
@@ -37,36 +41,15 @@ void AudioManager::setMute(bool isMute) {
 }
 
 void AudioManager::setVolume(int lv) {
-	int volume = lv;
-	switch(lv) {
-	case 0:
-		volume = 0;
-		break;
-	case 1:
-		volume = 15;
-		break;
-	case 2:
-		volume = 17;
-		break;
-	case 3:
-		volume = 19;
-		break;
-	case 4:
-		volume = 21;
-		break;
-	case 5:
-		volume = 23;
-		break;
-	case 6:
-		volume = 25;
-		break;
-	default:
-		break;
-	}
-	if(volume == 0) {
+	if (lv < 0) lv = 0;
+	if (lv > 6) lv = 6;
+	// The underlying Z21 mixer accepts 0..90. Spread the six user-facing
+	// steps across that range so each button press is clearly audible.
+	const int volume = lv * 15;
+	if (lv == 0) {
+		base::AudioManager::instance().setVolume(0);
 		base::AudioManager::instance().setMute(true);
-	}
-	else {
+	} else {
 		base::AudioManager::instance().setVolume(volume);
 		base::AudioManager::instance().setMute(false);
 	}
