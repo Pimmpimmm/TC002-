@@ -5,7 +5,7 @@ official `Z21_TC002_Demo` (GPL-3.0-or-later).
 
 ## What it proves
 
-- Middle-button press while idle publishes a 45-minute `start` envelope.
+- Middle-button press while idle publishes a `start` envelope (default 45 minutes).
 - Middle-button press while active publishes `stop`.
 - Clockwise or anti-clockwise rotation while active publishes `stop` with
   `reason=rotate_away`.
@@ -29,10 +29,13 @@ then `/tmp/ui/device.conf`, and falls back to the compiled defaults above:
 broker_host=192.0.2.100
 broker_port=1883
 event_topic=ulanzi/tc002-focus/events/focus
+focus_seconds=2700
+rest_seconds=300
 ```
 
 This keeps the same binary usable with every user's local EMQX; the computer's
-companion installer only needs to write that small per-device config file.
+companion installer only needs to write that small per-device config file. The two
+timer values accept `60..14400` seconds and take effect after restarting the app.
 
 No Lark token, MQTT password, message text, user identity, device serial or MAC
 is embedded in the application.
