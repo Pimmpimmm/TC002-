@@ -37,6 +37,7 @@ std::string makeEnvelope(const std::string& sessionId, const char* event,
 FocusController::FocusController()
 	: mRunning(false), mPhase(FocusPhase::READY), mAudioCommand(AudioCommand::NONE),
 	  mStartedAt(0), mFocusDeadline(0), mPhaseDeadlineMonotonicMs(0),
+	  mFocusSeconds(focus_config::kFocusSeconds), mRestSeconds(focus_config::kRestSeconds),
 	  mLastActionMs(0), mSessionCounter(0) {
 }
 
@@ -53,6 +54,9 @@ void FocusController::start() {
 	{
 		std::lock_guard<std::mutex> lock(mMutex);
 		if (mRunning) return;
+		const MqttPublisher::RuntimeConfig config = mPublisher.loadConfig();
+		mFocusSeconds = config.focusSeconds;
+		mRestSeconds = config.restSeconds;
 		mRunning = true;
 		mWorker = std::thread(&FocusController::workerLoop, this);
 		if (focus_config::kAudioSelfTestOnBoot) {
@@ -82,8 +86,8 @@ FocusSnapshot FocusController::snapshot() const {
 	std::lock_guard<std::mutex> lock(mMutex);
 	const int64_t nowMs = monotonicMs();
 	const int total = mPhase == FocusPhase::REST
-		? static_cast<int>(focus_config::kRestSeconds)
-		: static_cast<int>(focus_config::kFocusSeconds);
+		? static_cast<int>(mRestSeconds)
+		: static_cast<int>(mFocusSeconds);
 	int remaining = total;
 	if (mPhase != FocusPhase::READY) {
 		const int64_t remainingMs = mPhaseDeadlineMonotonicMs - nowMs;
@@ -124,8 +128,8 @@ void FocusController::beginFocus(int64_t now) {
 	requestAudio(AudioCommand::STOP);
 	mPhase = FocusPhase::FOCUS;
 	mStartedAt = now;
-	mFocusDeadline = now + focus_config::kFocusSeconds;
-	mPhaseDeadlineMonotonicMs = monotonicMs() + focus_config::kFocusSeconds * 1000;
+	mFocusDeadline = now + mFocusSeconds;
+	mPhaseDeadlineMonotonicMs = monotonicMs() + mFocusSeconds * 1000;
 	std::ostringstream id;
 	id << "sess-" << now << "-" << ++mSessionCounter;
 	mSessionId = id.str();
@@ -137,7 +141,7 @@ void FocusController::beginRest(const char* reason) {
 	requestAudio(AudioCommand::STOP);
 	enqueue(makeEnvelope(mSessionId, "stop", "REST", reason, mStartedAt, mFocusDeadline));
 	mPhase = FocusPhase::REST;
-	mPhaseDeadlineMonotonicMs = monotonicMs() + focus_config::kRestSeconds * 1000;
+	mPhaseDeadlineMonotonicMs = monotonicMs() + mRestSeconds * 1000;
 	mCondition.notify_all();
 	LOGI_TRACE("FocusProbe: rest started (%s)", reason);
 }
@@ -177,7 +181,7 @@ void FocusController::workerLoop() {
 				const int64_t nowMs = monotonicMs();
 				if (mPhase == FocusPhase::FOCUS && nowMs >= mPhaseDeadlineMonotonicMs) {
 					mPhase = FocusPhase::REST;
-					mPhaseDeadlineMonotonicMs = nowMs + focus_config::kRestSeconds * 1000;
+					mPhaseDeadlineMonotonicMs = nowMs + mRestSeconds * 1000;
 					requestAudio(AudioCommand::PLAY_FOCUS_DONE);
 					LOGI_TRACE("FocusProbe: focus completed; rest started automatically");
 				} else if (mPhase == FocusPhase::REST && nowMs >= mPhaseDeadlineMonotonicMs) {
