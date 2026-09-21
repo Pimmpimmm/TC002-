@@ -1,10 +1,44 @@
-# Ulanzi TC002 专注时钟
+# Ulanzi TC002 Focus Clock
+
+<p align="center">
+  <strong>把 Ulanzi TC002 变成一只真正连接工作节奏的桌面专注时钟。</strong><br>
+  macOS 一键部署 · Lark 系统状态同步 · 临时运行不刷固件
+</p>
+
+<p align="center">
+  <a href="https://github.com/Pimmpimmm/ulanzi-tc002-focus-clock/actions/workflows/portability.yml"><img src="https://github.com/Pimmpimmm/ulanzi-tc002-focus-clock/actions/workflows/portability.yml/badge.svg?branch=main" alt="Portability checks"></a>
+  <img src="https://img.shields.io/badge/macOS-13%2B-111111?logo=apple&logoColor=white" alt="macOS 13+">
+  <img src="https://img.shields.io/badge/Node.js-24%2B-339933?logo=node.js&logoColor=white" alt="Node.js 24+">
+  <img src="https://img.shields.io/badge/Lark-Personal%20Settings-4C83F1" alt="Lark Personal Settings API">
+</p>
+
+<p align="center">
+  <img src="device/TC002_Focus_Probe/previews/focus-done.png" alt="TC002 completion prompt preview" width="624">
+</p>
 
 这是一个给 Ulanzi TC002 使用的 Focus / Rest 专注时钟，并把当前用户的
 Lark“专注中”系统状态同步出去。默认是专注 45 分钟、休息 5 分钟，但每个人
 都可以在助手安装/配对时自定义时长。
 
-运行时直接调用 Lark Personal Settings API，不再创建或删除日历日程。
+运行时直接调用 Lark Personal Settings API，不创建或删除日历日程。
+
+## 为什么值得用
+
+| 能力 | 体验 |
+| --- | --- |
+| 一键部署 | 新 Mac 从 GitHub 冷克隆后，预演、安装、测试和构建 GUI 都有现成入口 |
+| 真实硬件 | TC002 负责桌面显示、按键和本地计时，电脑只提供同步服务 |
+| Lark 原生状态 | 专注开始/提前退出分别调用系统状态 `batch_open` / `batch_close` |
+| 安全边界 | Secret、Token 和共享密钥只进 macOS 钥匙串，不写入仓库或 MQTT |
+| 可回滚 | 临时运行包写入设备可写目录，重启 TC002 即恢复原生界面 |
+
+## 60 秒了解架构
+
+```text
+TC002 Focus Clock ── MQTT ──> 本机 EMQX ──> Focus bridge ──> 当前用户 Lark
+       │                                             │
+       └── 本地显示、按键、计时                         └── Personal Settings API
+```
 
 ## 工作方式
 
@@ -24,7 +58,7 @@ TC002 时钟
 App Secret 和共享密钥只写入当前用户的 macOS 钥匙串，不写进仓库、设备镜像
 或 MQTT 消息。
 
-## 先看这两份说明
+## 先看这几份说明
 
 - [macOS 统一 GUI 入口](mac-app/README.md)
 - [macOS 助手完整安装步骤](companion/README.md)
@@ -38,7 +72,7 @@ App Secret 和共享密钥只写入当前用户的 macOS 钥匙串，不写进�
 Wi-Fi ADB 配对仍由用户本人确认，凭据不会写入仓库：
 
 ```text
-请把 https://github.com/Pimmpimmm/TC002-.git 部署到这台 macOS 电脑：先检查
+请把 https://github.com/Pimmpimmm/ulanzi-tc002-focus-clock.git 部署到这台 macOS 电脑：先检查
 macOS 13+、Homebrew 和 Apple Command Line Tools，克隆仓库并阅读 README.md。
 运行 `bash bootstrap-macos.sh` 做预演，确认后运行
 `bash bootstrap-macos.sh --apply`。不要刷写 update.img、不要修改 /res、不要
@@ -91,8 +125,8 @@ EMQX 的 macOS 安装包由 Homebrew 提供。不要使用 Linux 的
 ### 2. 获取代码
 
 ```bash
-git clone <这个仓库的地址>
-cd 时钟
+git clone https://github.com/Pimmpimmm/ulanzi-tc002-focus-clock.git
+cd ulanzi-tc002-focus-clock
 npm ci
 ```
 

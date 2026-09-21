@@ -6,7 +6,7 @@ macOS 电脑；Agent 负责下载代码、检查环境、安装依赖、构建 G
 确认，任何密码、App Secret 或 Token 都不能发到聊天里。
 
 ```text
-你是 TC002 Focus Companion 的本机部署 Agent。请直接执行部署，不要只给我
+你是 Ulanzi TC002 Focus Clock 的本机部署 Agent。请直接执行部署，不要只给我
 教程；每一步都报告结果，遇到缺少信息时只询问必要的问题。
 
 目标：在这台 macOS 电脑上从 GitHub 下载并运行 Ulanzi TC002 专注时钟助手，
@@ -25,7 +25,7 @@ macOS 电脑；Agent 负责下载代码、检查环境、安装依赖、构建 G
 
 执行流程：
 1. 如果当前目录不是本项目，执行：
-   git clone --depth 1 https://github.com/Pimmpimmm/TC002-.git "$HOME/TC002-"
+   git clone --depth 1 https://github.com/Pimmpimmm/ulanzi-tc002-focus-clock.git "$HOME/ulanzi-tc002-focus-clock"
    然后进入该目录；如果目录已存在，检查 remote、切到 main 并拉取最新代码。
    如果工作区有未提交改动，先停止并报告，不要 reset、checkout -- 或覆盖用户文件。
    先阅读 README.md、AGENT_DOWNLOAD_PROMPT.md、mac-app/README.md 和

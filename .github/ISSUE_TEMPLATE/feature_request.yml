@@ -1,0 +1,25 @@
+name: "✨ Feature request"
+description: "提出一个能让专注时钟更好用的新想法。"
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 要解决的问题
+      description: 谁在什么场景遇到了什么限制？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+      description: 你希望它如何工作？如果涉及设备或 Lark，请说明边界。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 备选方案
+      description: 目前有没有临时绕过方式？

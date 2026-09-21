@@ -1,4 +1,4 @@
-# TC002 专注助手（macOS GUI）
+# Ulanzi TC002 Focus Companion（macOS GUI）
 
 这是统一入口的原生 macOS 前端。界面按“准备电脑 → 连接 TC002 → 授权 Lark → 专注设置”四步引导：
 

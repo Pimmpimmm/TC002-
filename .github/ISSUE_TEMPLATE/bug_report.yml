@@ -1,0 +1,43 @@
+name: "🐛 Bug report"
+description: "报告可复现的问题，帮助我们快速定位设备、GUI 或 Lark 集成故障。"
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！请不要在 Issue 中粘贴 App Secret、Token、Cookie、私钥或完整日志。
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题描述
+      description: 你看到的现象是什么？预期行为是什么？
+      placeholder: 简明描述问题和预期结果
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 请按顺序列出最小复现步骤。
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 环境
+      description: macOS 版本、Mac 架构、Node.js 版本、TC002 固件版本。
+      placeholder: macOS 15 arm64 / Node 24 / TC002 firmware 1.1.1
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 脱敏日志
+      description: 只粘贴脱敏后的错误片段，不要粘贴凭据或完整配置。
+      render: text

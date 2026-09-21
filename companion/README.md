@@ -72,7 +72,7 @@ Homebrew、`~/.local`、nvm、fnm、Volta 和 mise 中的 Node.js；确实缺少
 
 ```bash
 git clone <你的 GitHub 仓库地址>
-cd 时钟
+cd ulanzi-tc002-focus-clock
 npm ci
 ```
 

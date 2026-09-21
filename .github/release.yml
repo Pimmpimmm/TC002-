@@ -1,0 +1,23 @@
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+    authors:
+      - github-actions[bot]
+  categories:
+    - title: "🚀 用户可见变化"
+      labels:
+        - enhancement
+        - feature
+    - title: "🐛 修复"
+      labels:
+        - bug
+        - fix
+    - title: "🧰 工程与部署"
+      labels:
+        - documentation
+        - dependencies
+        - chore
+    - title: "📦 其他"
+      labels:
+        - "*"
