@@ -35,6 +35,16 @@ const letters = {
   Y: [0b101, 0b101, 0b010, 0b010, 0b010]
 };
 
+// Completion prompts use the same 3x7 pair glyphs as FocusPage.cpp. Each
+// source pixel is enlarged to a 2x2 LED cell, leaving only the outer border.
+const promptGlyphs = {
+  GO: [0x77, 0x45, 0x45, 0x55, 0x55, 0x55, 0x77],
+  RE: [0x67, 0x54, 0x54, 0x66, 0x54, 0x54, 0x57],
+  ST: [0x77, 0x42, 0x42, 0x72, 0x12, 0x12, 0x72],
+  WO: [0x57, 0x55, 0x55, 0x75, 0x75, 0x75, 0x27],
+  RK: [0x65, 0x55, 0x56, 0x64, 0x56, 0x55, 0x55]
+};
+
 function render({ seconds, phase }) {
   const pixels = Array.from({ length: HEIGHT }, () => Array.from({ length: WIDTH }, () => [...BLACK]));
   const set = (x, y, color) => { if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) pixels[y][x] = color; };
@@ -51,6 +61,25 @@ function render({ seconds, phase }) {
   };
   let accent = phase === 'FOCUS' ? FOCUS : (phase === 'REST' ? REST : READY);
   if (phase !== 'READY' && seconds <= 30) accent = WARNING;
+
+  if (phase === 'FOCUS_DONE' || phase === 'REST_DONE') {
+    const prompt = phase === 'FOCUS_DONE'
+      ? [promptGlyphs.GO, promptGlyphs.RE, promptGlyphs.ST]
+      : [promptGlyphs.GO, promptGlyphs.WO, promptGlyphs.RK];
+    const scale = 2;
+    const blockWidth = 7 * scale;
+    const gap = 4;
+    const startX = Math.floor((WIDTH - (prompt.length * blockWidth + (prompt.length - 1) * gap)) / 2);
+    for (let index = 0; index < prompt.length; index += 1) {
+      for (let row = 0; row < 7; row += 1) for (let column = 0; column < 7; column += 1) {
+        if (!(prompt[index][row] & (1 << (6 - column)))) continue;
+        for (let dy = 0; dy < scale; dy += 1) for (let dx = 0; dx < scale; dx += 1) {
+          set(startX + index * (blockWidth + gap) + column * scale + dx, 1 + row * scale + dy, WARNING);
+        }
+      }
+    }
+    return pixels;
+  }
 
   if (phase === 'REST') {
     line(2, 4, 8, 4, accent); line(2, 4, 2, 9, accent); line(2, 9, 8, 9, accent);
@@ -112,7 +141,9 @@ for (const item of [
   ['ready', { seconds: 2700, phase: 'READY' }],
   ['active', { seconds: 2699, phase: 'FOCUS' }],
   ['last-minute', { seconds: 29, phase: 'FOCUS' }],
-  ['rest', { seconds: 299, phase: 'REST' }]
+  ['rest', { seconds: 299, phase: 'REST' }],
+  ['done', { seconds: 0, phase: 'FOCUS_DONE' }],
+  ['rest-done', { seconds: 0, phase: 'REST_DONE' }]
 ]) savePpm(path.join(output, `focus-${item[0]}.ppm`), render(item[1]));
 
 console.log(output);

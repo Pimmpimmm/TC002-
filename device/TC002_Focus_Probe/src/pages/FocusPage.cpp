@@ -30,14 +30,14 @@ const uint8_t DIGITS[10][7] = {
 };
 
 // Six compact 7x9 ASCII pairs used for the two completion prompts. Each block
-// contains two 3x5 letters, so the 52x16 LED matrix can show GO REST / GO WORK
-// without sending UTF-8 bytes through the stock ASCII-only font.
-const uint8_t GLYPH_GO[9] = {0x00, 0x00, 0x77, 0x45, 0x55, 0x55, 0x77, 0x00, 0x00};
-const uint8_t GLYPH_RE[9] = {0x00, 0x00, 0x67, 0x54, 0x66, 0x54, 0x57, 0x00, 0x00};
-const uint8_t GLYPH_ST[9] = {0x00, 0x00, 0x77, 0x42, 0x72, 0x12, 0x72, 0x00, 0x00};
+// contains two 3x7 letters. drawPrompt() scales every source pixel to a 2x2
+// cell, making GO REST / GO WORK fill the matrix while leaving a one-cell edge.
+const uint8_t GLYPH_GO[9] = {0x77, 0x45, 0x45, 0x55, 0x55, 0x55, 0x77, 0x00, 0x00};
+const uint8_t GLYPH_RE[9] = {0x67, 0x54, 0x54, 0x66, 0x54, 0x54, 0x57, 0x00, 0x00};
+const uint8_t GLYPH_ST[9] = {0x77, 0x42, 0x42, 0x72, 0x12, 0x12, 0x72, 0x00, 0x00};
 const uint8_t GLYPH_BLANK[9] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-const uint8_t GLYPH_WO[9] = {0x00, 0x00, 0x57, 0x55, 0x75, 0x75, 0x57, 0x00, 0x00};
-const uint8_t GLYPH_RK[9] = {0x00, 0x00, 0x65, 0x56, 0x64, 0x56, 0x55, 0x00, 0x00};
+const uint8_t GLYPH_WO[9] = {0x57, 0x55, 0x55, 0x75, 0x75, 0x75, 0x27, 0x00, 0x00};
+const uint8_t GLYPH_RK[9] = {0x65, 0x55, 0x56, 0x64, 0x56, 0x55, 0x55, 0x00, 0x00};
 } // namespace
 
 FocusPage::FocusPage() : PageBase("FocusPage") {
@@ -109,23 +109,32 @@ void FocusPage::drawVolumeOverlay(Surface& surface, int volumeLevel) {
 
 void FocusPage::drawPrompt(Surface& surface, bool focusCompleted) {
 	static const uint8_t* const restPrompt[] = {
-		GLYPH_GO, GLYPH_RE, GLYPH_ST, GLYPH_BLANK
+		GLYPH_GO, GLYPH_RE, GLYPH_ST
 	};
 	static const uint8_t* const workPrompt[] = {
-		GLYPH_GO, GLYPH_WO, GLYPH_RK, GLYPH_BLANK
+		GLYPH_GO, GLYPH_WO, GLYPH_RK
 	};
 	const uint8_t* const* glyphs = focusCompleted ? restPrompt : workPrompt;
-	const int glyphCount = 4;
+	const int glyphCount = 3;
 	const int glyphWidth = 7;
-	const int gap = 2;
-	const int totalWidth = glyphCount * glyphWidth + (glyphCount - 1) * gap;
+	const int scale = 2;
+	const int gap = 4;
+	const int blockWidth = glyphWidth * scale;
+	const int totalWidth = glyphCount * blockWidth + (glyphCount - 1) * gap;
 	const int startX = (52 - totalWidth) / 2;
+	const int startY = 1;
+	Painter& painter = Painter::getInstance();
 	for (int index = 0; index < glyphCount; ++index) {
-		for (int row = 0; row < 9; ++row) {
+		for (int row = 0; row < 7; ++row) {
 			for (int column = 0; column < glyphWidth; ++column) {
 				if (glyphs[index][row] & (1 << (glyphWidth - 1 - column))) {
-					Painter::getInstance().drawPixel(surface,
-						startX + index * (glyphWidth + gap) + column, 3 + row, COLOR_ALERT);
+					for (int dy = 0; dy < scale; ++dy) {
+						for (int dx = 0; dx < scale; ++dx) {
+							painter.drawPixel(surface,
+								startX + index * (blockWidth + gap) + column * scale + dx,
+								startY + row * scale + dy, COLOR_ALERT);
+						}
+					}
 				}
 			}
 		}
