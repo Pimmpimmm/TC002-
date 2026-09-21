@@ -54,6 +54,9 @@ final class AppModel {
     var onChange: (() -> Void)?
     var onEnvironmentInstallOffer: (([String], String) -> Void)?
     private var oauthProcess: Process?
+    private var restartOAuthWhenStopped = false
+
+    var isOAuthRunning: Bool { oauthProcess?.isRunning == true }
 
     func load() {
         let defaults = FileManager.default.currentDirectoryPath
@@ -180,7 +183,21 @@ final class AppModel {
 
     func authorizeLark() {
         guard !appID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { status = "请先填写 Lark App ID"; notify(); return }
-        guard oauthProcess == nil else { status = "Lark 授权正在进行，请在浏览器完成"; notify(); return }
+        if let existing = oauthProcess {
+            if existing.isRunning {
+                restartOAuthWhenStopped = true
+                isBusy = true
+                status = "正在结束上一次授权并重新开始…"
+                appendLog("收到重新授权请求：正在关闭上一次 OAuth 流程并释放本机 8788 端口。")
+                notify()
+                existing.terminate()
+                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 2) {
+                    if existing.isRunning { existing.interrupt() }
+                }
+                return
+            }
+            oauthProcess = nil
+        }
         let storedAppID = keychainValue(account: "app_id") ?? ""
         let effectiveSecret = appSecret.isEmpty && storedAppID == appID ? (keychainValue(account: "app_secret") ?? "") : appSecret
         guard effectiveSecret.count >= 8 else { status = "请填写与当前 App ID 匹配的 App Secret"; notify(); return }
@@ -272,14 +289,26 @@ final class AppModel {
             self?.updateOnMain {
                 self?.appendLog(remainingText)
                 self?.oauthProcess = nil
-                self?.isBusy = false
+                let shouldRestart = self?.restartOAuthWhenStopped == true
+                self?.restartOAuthWhenStopped = false
                 self?.refreshAuthorizationState()
-                if process.terminationStatus == 0 {
+                if shouldRestart {
+                    self?.isBusy = true
+                    self?.isLarkVerified = false
+                    self?.status = "正在重新打开 Lark 授权页面…"
+                    self?.appendLog("上一次 OAuth 流程已结束，正在启动新的授权。")
+                    self?.notify()
+                    self?.startOAuthProcess()
+                } else if process.terminationStatus == 0 {
+                    self?.isBusy = false
                     self?.isLarkVerified = true; self?.appSecret = ""; self?.status = "Lark 授权和系统状态验证成功"
+                    self?.notify()
                 } else {
+                    self?.isBusy = false
                     self?.isLarkVerified = false; self?.status = "Lark 授权未完成，请查看下方日志"
+                    self?.appendLog("授权流程已退出（状态码 \(process.terminationStatus)）。可以直接点击“重新授权 Lark”再次尝试。")
+                    self?.notify()
                 }
-                self?.notify()
             }
         }
         oauthProcess = process
@@ -697,10 +726,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         header.heightAnchor.constraint(greaterThanOrEqualToConstant: 24).isActive = true
         logView.isEditable = false
         logView.isRichText = false
-        logView.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        logView.textColor = .secondaryLabelColor
+        logView.isSelectable = true
+        logView.isVerticallyResizable = true
+        logView.isHorizontallyResizable = false
+        logView.autoresizingMask = [.width]
+        logView.frame = NSRect(x: 0, y: 0, width: 704, height: 158)
+        logView.minSize = NSSize(width: 0, height: 158)
+        logView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        logView.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
+        logView.textColor = .labelColor
         logView.backgroundColor = NSColor.textBackgroundColor.withAlphaComponent(0.55)
         logView.textContainerInset = NSSize(width: 10, height: 9)
+        logView.textContainer?.widthTracksTextView = true
+        logView.textContainer?.containerSize = NSSize(width: 704, height: CGFloat.greatestFiniteMagnitude)
         let logScroll = NSScrollView()
         logScroll.drawsBackground = false
         logScroll.borderType = .noBorder
@@ -784,6 +822,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async {
             self.statusField.stringValue = self.model.status
             self.logView.string = self.model.logText
+            if let container = self.logView.textContainer { self.logView.layoutManager?.ensureLayout(for: container) }
+            self.logView.needsDisplay = true
             self.logView.scrollToEndOfDocument(nil)
             self.updateReadiness(0, title: self.model.isEnvironmentReady ? "环境就绪" : "待检查环境", ready: self.model.isEnvironmentReady)
             self.updateReadiness(1, title: self.model.isLarkVerified ? "Lark 已验证" : (self.model.isAuthorized ? "Lark 待验证" : "待授权 Lark"), ready: self.model.isLarkVerified, partial: self.model.isAuthorized)
@@ -792,8 +832,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.operationIcon.image = self.symbol(self.model.isBusy ? "clock.arrow.circlepath" : (self.model.status.contains("失败") || self.model.status.contains("未通过") || self.model.status.contains("未完成") ? "exclamationmark.triangle.fill" : "info.circle.fill"), size: 20, weight: .semibold)
             self.operationIcon.contentTintColor = self.model.isBusy ? .systemBlue : (self.model.status.contains("失败") || self.model.status.contains("未通过") || self.model.status.contains("未完成") ? .systemOrange : .systemGreen)
             if self.model.isBusy { self.busyIndicator.startAnimation(nil) } else { self.busyIndicator.stopAnimation(nil) }
-            self.authorizeButton.title = self.model.isAuthorized ? "重新授权 Lark" : "授权 Lark"
-            self.authorizeButton.isEnabled = !self.model.isBusy
+            self.authorizeButton.title = self.model.isOAuthRunning ? "重新开始授权" : (self.model.isAuthorized ? "重新授权 Lark" : "授权 Lark")
+            self.authorizeButton.isEnabled = !self.model.isBusy || self.model.isOAuthRunning
             self.environmentButton.isEnabled = !self.model.isBusy
             self.deviceButton.isEnabled = !self.model.isBusy
             self.verifyLarkButton.isEnabled = !self.model.isBusy && self.model.isAuthorized

@@ -29,4 +29,12 @@ test('OAuth server closes even when the browser keeps its callback connection al
   ]);
   agent.destroy();
   assert.equal(server.listening, false);
+
+  const retryServer = createServer((_request, response) => response.end('retry ok'));
+  await new Promise((resolve, reject) => {
+    retryServer.once('error', reject);
+    retryServer.listen(address.port, '127.0.0.1', resolve);
+  });
+  assert.equal(retryServer.listening, true);
+  await closeOAuthServer(retryServer, { forceAfterMs: 100 });
 });

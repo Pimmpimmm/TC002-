@@ -41,6 +41,7 @@ Homebrew 和 Apple Command Line Tools 仍需要用户先安装。
 ## 授权和环境排障
 
 - Lark 返回 `HTTP 400, code 99991672`：应用缺少系统状态 API 权限。开通权限、发布应用版本并确认租户可用后，再点击“重新授权 Lark”。
+- 首次授权未完成或浏览器被关闭：授权进行中时按钮会显示“重新开始授权”。再次点击会结束旧 OAuth 进程、释放本机 `8788` 端口并自动打开新的授权页面，不需要退出 App。
 - 浏览器显示授权成功但 GUI 一直显示“正在打开 Lark 授权页面”：这是旧版本地 OAuth 服务没有关闭浏览器 keep-alive 连接。请退出并重新打开最新的 App；凭据已经写入钥匙串，不需要重复填写 Secret。
 - GUI 报 Node.js 缺失但终端可以运行：Finder 不加载 `.zshrc`。新版 GUI 会扫描 Homebrew、`~/.local`、nvm、fnm、Volta 和 mise；仍缺少时会询问是否使用 Homebrew 安装。
 - 本地 OAuth 端口被占用时，先关闭其他一次性授权窗口，再重新授权；端口为 `127.0.0.1:8788`。
