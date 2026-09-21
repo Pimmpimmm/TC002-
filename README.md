@@ -31,6 +31,28 @@ App Secret 和共享密钥只写入当前用户的 macOS 钥匙串，不写进�
 - [TC002 设备端说明](device/TC002_Focus_Probe/README_FOCUS.md)
 - [交给其他 Agent 执行下载/安装的提示词](AGENT_DOWNLOAD_PROMPT.md)
 
+## 给 AI Agent 的一键配置提示词
+
+在新 Mac 上，可以把下面这段直接发给支持执行终端命令的 AI Agent。它会先下载
+最新代码、预演环境检查，再安装依赖、构建并打开 GUI；Lark OAuth 和 TC002 的
+Wi-Fi ADB 配对仍由用户本人确认，凭据不会写入仓库：
+
+```text
+请把 https://github.com/Pimmpimmm/TC002-.git 部署到这台 macOS 电脑：先检查
+macOS 13+、Homebrew 和 Apple Command Line Tools，克隆仓库并阅读 README.md。
+运行 `bash bootstrap-macos.sh` 做预演，确认后运行
+`bash bootstrap-macos.sh --apply`。不要刷写 update.img、不要修改 /res、不要
+把 Lark Secret/Token 写入文件或发到聊天里。打开生成的 TC002FocusCompanion.app，
+让我在 GUI 中输入 TC002 的 Wi-Fi ADB 地址和自己的 Lark App 信息，并在浏览器
+完成 OAuth；然后点击“启动专注时钟”。最后运行测试和 bundle 校验，确认 EMQX、
+Lark bridge、MQTT adapter、ADB 和 Lark 系统状态都正常，并只报告结果和仍需我
+手动完成的步骤。完整流程和 GUI 不可用时的 CLI 备用命令见
+`AGENT_DOWNLOAD_PROMPT.md`。
+```
+
+完整、可复制的 Agent 流程（含权限、网络、错误码和安全边界）见
+[AGENT_DOWNLOAD_PROMPT.md](AGENT_DOWNLOAD_PROMPT.md)。
+
 ## 新 Mac 推荐入口
 
 先安装 [Homebrew](https://brew.sh) 和 Apple 命令行工具（`xcode-select --install`），
