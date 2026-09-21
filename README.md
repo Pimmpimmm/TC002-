@@ -1,4 +1,8 @@
-# Ulanzi TC002 Focus Clock
+<p align="center">
+  <img src="mac-app/Assets/AppIcon.png" alt="Ulanzi TC002 Focus Clock app icon" width="128">
+</p>
+
+<h1 align="center">Ulanzi TC002 Focus Clock</h1>
 
 <p align="center">
   <strong>把 Ulanzi TC002 变成一只真正连接工作节奏的桌面专注时钟。</strong><br>
@@ -21,6 +25,14 @@ Lark“专注中”系统状态同步出去。默认是专注 45 分钟、休息
 都可以在助手安装/配对时自定义时长。
 
 运行时直接调用 Lark Personal Settings API，不创建或删除日历日程。
+
+## 界面与视觉
+
+- macOS GUI 使用原生状态卡片和四步引导，环境、Lark、TC002、电脑助手是否就绪一眼可见；
+- 支持浅色/深色模式，主要操作、警告和运行状态同时使用文字、图标与语义色，不只依赖颜色；
+- TC002 专注阶段保持绿色，休息阶段保持蓝色，最后 30 秒不会突然变红；
+- 专注结束显示蓝色 `GO REST`，休息结束显示绿色 `GO WORK`，内容左右对称并尽量铺满 52×16 点阵；
+- macOS App 已包含专用图标，并提供 Intel 与 Apple Silicon 通用构建。
 
 ## 为什么值得用
 
