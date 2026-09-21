@@ -10,7 +10,7 @@
 “恢复原生界面”按钮只重启 TC002；临时程序在 `/tmp`，所以设备重启后会恢复原生
 页面，不会修改固件。Lark 密钥和 token 仍然只进 macOS 钥匙串。
 
-当前 GUI 是开发版，项目目录字段仍可见。`build-app.sh` 会先校验
+GUI 将项目目录作为“高级设置（通常无需修改）”保留。`build-app.sh` 会先校验
 `device/TC002_Focus_Probe/TemporaryFocusRelease` 的 SHA-256 manifest，再把项目脚本
 和设备运行包放进 App Resources。正式对外分发前仍需给 App 签名和公证。
 
@@ -59,6 +59,10 @@ Homebrew 当前提供 macOS Apple Silicon 和 Intel 的 EMQX 安装包。这个�
 - 电脑和 TC002 在同一个局域网；
 - 电脑的局域网 IP 最好在路由器中做 DHCP 保留。
 
+如果从 Finder 启动 GUI，终端的 `.zshrc` 不会自动加载。GUI 会自行查找
+Homebrew、`~/.local`、nvm、fnm、Volta 和 mise 中的 Node.js；确实缺少 Node.js、ADB
+或 EMQX 时，会在用户确认后使用 Homebrew 安装。
+
 ## 从零安装流程
 
 以下步骤每个人的 Mac 都执行一次。
@@ -92,7 +96,7 @@ brew --prefix emqx
 
 ### 第 3 步：准备 Lark 授权
 
-先完成 Lark OAuth（每个人在自己的电脑上做一次）：
+先完成 Lark OAuth（每个人在自己的 Mac 上做一次）：
 
 ```bash
 bash bridge/setup-lark-oauth.sh
@@ -100,6 +104,11 @@ bash bridge/setup-lark-oauth.sh
 
 脚本会要求输入 Lark App ID 和 App Secret，并在浏览器打开授权页面。
 Token 只会写入本机 macOS 钥匙串。
+
+Lark 自建应用还必须配置回调地址
+`http://127.0.0.1:8788/oauth/callback`，开通并发布系统状态的获取、创建、批量开启、批量关闭权限。若返回 `99991672`，先补齐权限并确认应用对当前租户可用。
+
+日常推荐直接使用 GUI 授权。浏览器显示成功后，GUI 会自动关闭本地回调服务；如果旧版 GUI 一直停在“正在打开 Lark 授权页面”，请关闭旧 App 并打开最新构建，钥匙串中的已有凭据无需重新输入。
 
 ### 第 4 步：先预演助手安装
 

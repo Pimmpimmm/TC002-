@@ -4,7 +4,7 @@
 
 ## 一次授权
 
-在 Lark 开放平台的自建应用中开通“系统状态”相关权限，配置回调地址 `http://127.0.0.1:8788/oauth/callback`，然后运行：
+在 Lark 开放平台的自建应用中配置回调地址 `http://127.0.0.1:8788/oauth/callback`，开通并发布系统状态相关 API 权限（获取、创建、批量开启、批量关闭），确认应用在当前租户可用，然后运行：
 
 ```bash
 bash bridge/setup-lark-oauth.sh
@@ -16,6 +16,10 @@ bash bridge/setup-lark-oauth.sh
 - 调用 `/authen/v1/user_info` 获取当前用户 `open_id`；
 - 列出租户系统状态，复用已有的“专注中”，没有时只创建一次；
 - 保存 `user_open_id` 和 `system_status_id`。
+
+GUI 用户不需要运行上面的终端脚本；在 App 中点击“授权 Lark”即可。终端脚本适合无 GUI 或排查场景。授权回调成功后，本地 HTTP 服务会主动关闭浏览器 keep-alive 连接并退出。
+
+如果收到 `HTTP 400, code 99991672`，表示应用尚未申请对应 API 权限；请在开放平台开通并发布权限后重新授权。浏览器显示成功但脚本不退出时，使用最新代码重试，不要重复创建状态。
 
 旧版已授权的机器可手动补齐：
 

@@ -47,6 +47,9 @@ bash bootstrap-macos.sh --apply
 当前安全部署模式为临时部署：不刷固件，TC002 重启后恢复原生界面。
 新设备需要先在设备上开启 Wi-Fi ADB。
 
+首次使用前，还要在 Lark 开放平台的自建应用中配置 OAuth 回调地址
+`http://127.0.0.1:8788/oauth/callback`，开通系统状态相关 API 权限（获取、创建、批量开启、批量关闭），并发布应用版本、确认当前租户可用。GUI 会在授权后自动复用或创建“专注中”状态，不需要创建日历。
+
 ## 手动安装（排查时使用）
 
 ### 1. 安装依赖
@@ -78,6 +81,12 @@ bash bridge/setup-lark-oauth.sh
 ```
 
 浏览器授权成功后，Token 会写入本机钥匙串。
+
+如果回调页面显示 `Authorization failed`，先查看 GUI 日志或终端错误码：
+
+- `99991672` 表示应用还没有申请对应的 API 权限；开通并发布系统状态权限后重新授权；
+- 浏览器已经显示成功、但 GUI 仍停在“正在打开 Lark 授权页面”时，关闭旧版 App，重新打开最新构建。新版会主动关闭浏览器 keep-alive 连接并完成收尾；
+- Finder 启动 App 时不会读取终端 `.zshrc`。GUI 会自动识别 Homebrew、`~/.local`、nvm、fnm、Volta 和 mise 中的 Node.js。
 
 ### 4. 预演助手安装
 

@@ -14,6 +14,9 @@
 
 环境检查会识别 Homebrew、`~/.local`、nvm、fnm、Volta 和 mise 等常见 Node.js 安装位置，不依赖 Finder 是否加载终端的 `.zshrc`。如果确实缺少 Node.js、ADB 或 EMQX，界面会说明缺少的组件，并在用户确认后使用 Homebrew 安装。
 
+Lark 自建应用需要先配置回调地址
+`http://127.0.0.1:8788/oauth/callback`，并开通、发布系统状态相关 API 权限：获取系统状态、创建系统状态、批量开启和批量关闭。授权按钮会打开浏览器，OAuth 输出会实时显示在日志区；浏览器回调完成后，GUI 会自动关闭本地授权服务并恢复按钮。
+
 Lark App Secret、OAuth token、refresh token 和 bridge shared secret 不写入 GUI
 配置文件，仍由现有 bridge 写入 macOS 钥匙串。GUI 配置文件只保存设备 IP、时长、
 项目目录。用户 `open_id` 和“专注中”状态 ID 在授权时自动获取。
@@ -32,6 +35,13 @@ Homebrew 和 Apple Command Line Tools 仍需要用户先安装。
 - bootstrap 会用 `npm ci` 安装本项目锁定的依赖；
 - 首次使用需要在 Lark 开放平台配置 OAuth 回调：
   `http://127.0.0.1:8788/oauth/callback`。
+
+## 授权和环境排障
+
+- Lark 返回 `HTTP 400, code 99991672`：应用缺少系统状态 API 权限。开通权限、发布应用版本并确认租户可用后，再点击“重新授权 Lark”。
+- 浏览器显示授权成功但 GUI 一直显示“正在打开 Lark 授权页面”：这是旧版本地 OAuth 服务没有关闭浏览器 keep-alive 连接。请退出并重新打开最新的 App；凭据已经写入钥匙串，不需要重复填写 Secret。
+- GUI 报 Node.js 缺失但终端可以运行：Finder 不加载 `.zshrc`。新版 GUI 会扫描 Homebrew、`~/.local`、nvm、fnm、Volta 和 mise；仍缺少时会询问是否使用 Homebrew 安装。
+- 本地 OAuth 端口被占用时，先关闭其他一次性授权窗口，再重新授权；端口为 `127.0.0.1:8788`。
 
 项目根目录运行（开发调试）：
 
