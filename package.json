@@ -33,6 +33,6 @@
     "companion:configure-device": "bash companion/configure-device.sh"
   },
   "devDependencies": {
-    "aedes": "1.1.2"
+    "aedes": "1.2.0"
   }
 }
