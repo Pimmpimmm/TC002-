@@ -14,6 +14,26 @@ export const OAUTH_HOST = '127.0.0.1';
 export const OAUTH_PORT = 8788;
 export const OAUTH_PATH = '/oauth/callback';
 
+export async function closeOAuthServer(server, { forceAfterMs = 1_000 } = {}) {
+  await new Promise(resolve => {
+    let finished = false;
+    let forceTimer;
+    const done = () => {
+      if (finished) return;
+      finished = true;
+      if (forceTimer) clearTimeout(forceTimer);
+      resolve();
+    };
+    server.close(done);
+    server.closeIdleConnections?.();
+    forceTimer = setTimeout(() => {
+      server.closeAllConnections?.();
+      done();
+    }, forceAfterMs);
+    forceTimer.unref?.();
+  });
+}
+
 export async function runOAuth({
   service = KEYCHAIN_SERVICE,
   host = OAUTH_HOST,
@@ -52,8 +72,8 @@ export async function runOAuth({
       const tenant = await getTenantAccessToken({ appId, appSecret, fetchImpl });
       const ensured = await ensureFocusSystemStatus({ tenantAccessToken: tenant.token, fetchImpl });
       writeKeychainSecret({ service, account: 'system_status_id', value: ensured.status.system_status_id });
+      response.once('finish', () => finish.resolve({ ok: true, createdStatus: ensured.created }));
       response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }).end('Lark authorization succeeded. You can close this page.');
-      finish.resolve({ ok: true, createdStatus: ensured.created });
     } catch (error) {
       response.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' }).end('Authorization failed. Return to Terminal for the error.');
       finish.reject(error);
@@ -75,7 +95,7 @@ export async function runOAuth({
     log('授权成功：Token、用户 open_id 和“专注中”状态 ID 已写入 macOS 钥匙串。');
   } finally {
     clearTimeout(timer);
-    await new Promise(resolve => server.close(resolve));
+    await closeOAuthServer(server);
   }
 }
 
