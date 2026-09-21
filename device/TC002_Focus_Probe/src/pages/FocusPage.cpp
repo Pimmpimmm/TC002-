@@ -124,6 +124,7 @@ void FocusPage::drawPrompt(Surface& surface, bool focusCompleted) {
 	const int startX = (52 - totalWidth) / 2;
 	const int startY = 1;
 	Painter& painter = Painter::getInstance();
+	const Color& promptColor = focusCompleted ? COLOR_REST : COLOR_FOCUS;
 	for (int index = 0; index < glyphCount; ++index) {
 		for (int row = 0; row < 7; ++row) {
 			for (int column = 0; column < glyphWidth; ++column) {
@@ -132,7 +133,7 @@ void FocusPage::drawPrompt(Surface& surface, bool focusCompleted) {
 						for (int dx = 0; dx < scale; ++dx) {
 							painter.drawPixel(surface,
 								startX + index * (blockWidth + gap) + column * scale + dx,
-								startY + row * scale + dy, COLOR_ALERT);
+								startY + row * scale + dy, promptColor);
 						}
 					}
 				}

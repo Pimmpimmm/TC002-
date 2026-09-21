@@ -6,10 +6,9 @@ const HEIGHT = 16;
 const SCALE = 12;
 const BLACK = [0, 0, 0];
 const DIM = [18, 18, 18];
-const READY = [50, 130, 255];
+const READY = [255, 255, 255];
 const FOCUS = [40, 230, 110];
-const REST = [255, 180, 45];
-const WARNING = [255, 70, 35];
+const REST = [40, 120, 255];
 const TEXT = [225, 235, 255];
 
 const digits = [
@@ -60,12 +59,12 @@ function render({ seconds, phase }) {
     }
   };
   let accent = phase === 'FOCUS' ? FOCUS : (phase === 'REST' ? REST : READY);
-  if (phase !== 'READY' && seconds <= 30) accent = WARNING;
 
   if (phase === 'FOCUS_DONE' || phase === 'REST_DONE') {
     const prompt = phase === 'FOCUS_DONE'
       ? [promptGlyphs.GO, promptGlyphs.RE, promptGlyphs.ST]
       : [promptGlyphs.GO, promptGlyphs.WO, promptGlyphs.RK];
+    const promptColor = phase === 'FOCUS_DONE' ? REST : FOCUS;
     const scale = 2;
     const blockWidth = 7 * scale;
     const gap = 4;
@@ -74,7 +73,7 @@ function render({ seconds, phase }) {
       for (let row = 0; row < 7; row += 1) for (let column = 0; column < 7; column += 1) {
         if (!(prompt[index][row] & (1 << (6 - column)))) continue;
         for (let dy = 0; dy < scale; dy += 1) for (let dx = 0; dx < scale; dx += 1) {
-          set(startX + index * (blockWidth + gap) + column * scale + dx, 1 + row * scale + dy, WARNING);
+          set(startX + index * (blockWidth + gap) + column * scale + dx, 1 + row * scale + dy, promptColor);
         }
       }
     }

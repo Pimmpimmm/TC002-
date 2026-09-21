@@ -70,7 +70,7 @@ final class AppModel {
         if hostIP.isEmpty { hostIP = detectHostIP() }
         if appID.isEmpty { appID = (try? Self.run("/usr/bin/security", args: ["find-generic-password", "-s", keychainService, "-a", "app_id", "-w"]))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
         refreshAuthorizationState()
-        areServicesRunning = ["com.tc002.focus-emqx", "com.tc002.focus-bridge", "com.tc002.focus-mqtt"].contains {
+        areServicesRunning = ["com.tc002.focus-emqx", "com.tc002.focus-bridge", "com.tc002.focus-mqtt"].allSatisfy {
             (try? Self.run("/bin/launchctl", args: ["list", $0])) != nil
         }
         status = isAuthorized ? "Lark 凭据已保存；启动前会再验证权限" : "请从第 1 步开始配置"
@@ -197,7 +197,7 @@ final class AppModel {
     }
 
     func startFocus() {
-        guard let focus = Int(focusMinutes), let rest = Int(restMinutes), focus >= 1, rest >= 1 else { status = "专注和休息时长必须是正整数分钟"; notify(); return }
+        guard let focus = Int(focusMinutes), let rest = Int(restMinutes), (1...240).contains(focus), (1...240).contains(rest) else { status = "专注和休息时长必须是 1–240 分钟的整数"; notify(); return }
         guard !deviceIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { status = "请填写时钟 IP"; notify(); return }
         guard !hostIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { status = "请填写电脑 IP"; notify(); return }
         guard isAuthorized else { status = "请先完成 Lark 授权"; notify(); return }
@@ -379,9 +379,14 @@ final class AppModel {
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let model = AppModel(); private var window: NSWindow!
-    private let deviceField = NSTextField(); private let hostField = NSTextField(); private let focusField = NSTextField(); private let restField = NSTextField(); private let appIDField = NSTextField(); private let appSecretField = NSSecureTextField(); private let repoField = NSTextField(); private let statusField = NSTextField(labelWithString: ""); private let readinessField = NSTextField(labelWithString: ""); private let logView = NSTextView()
+    private let deviceField = NSTextField(); private let hostField = NSTextField(); private let focusField = NSTextField(); private let restField = NSTextField(); private let appIDField = NSTextField(); private let appSecretField = NSSecureTextField(); private let repoField = NSTextField(); private let statusField = NSTextField(labelWithString: ""); private let logView = NSTextView()
     private let startButton = NSButton(title: "启动专注时钟", target: nil, action: nil); private let stopButton = NSButton(title: "停止电脑助手", target: nil, action: nil); private let rebootButton = NSButton(title: "恢复原生界面（重启时钟）", target: nil, action: nil); private let authorizeButton = NSButton(title: "授权 Lark", target: nil, action: nil)
     private let environmentButton = NSButton(title: "检查运行环境", target: nil, action: nil); private let deviceButton = NSButton(title: "测试时钟连接", target: nil, action: nil); private let verifyLarkButton = NSButton(title: "验证 Lark 配置", target: nil, action: nil)
+    private let busyIndicator = NSProgressIndicator()
+    private let operationIcon = NSImageView()
+    private var readinessLabels: [NSTextField] = []
+    private var readinessIcons: [NSImageView] = []
+    private var readinessCards: [NSBox] = []
 
     static func main() { let app = NSApplication.shared; let delegate = AppDelegate(); app.delegate = delegate; app.setActivationPolicy(.regular); withExtendedLifetime(delegate) { app.run() } }
     func applicationDidFinishLaunching(_ notification: Notification) { model.onChange = { [weak self] in self?.refresh() }; model.onEnvironmentInstallOffer = { [weak self] packages, message in self?.offerEnvironmentInstall(packages: packages, reason: message) }; buildWindow(); model.load(); populateFieldsFromModel(); refresh() }
@@ -389,58 +394,396 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) { collectFields(); model.save() }
 
     private func buildWindow() {
-        let content = NSView(frame: NSRect(x: 0, y: 0, width: 640, height: 1320)); let scroll = NSScrollView(); scroll.hasVerticalScroller = true; scroll.documentView = content
-        let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 14; stack.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(stack)
-        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24), stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24), stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 24), stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -24), stack.widthAnchor.constraint(equalToConstant: 592)])
-        let title = NSTextField(labelWithString: "TC002 专注助手"); title.font = .systemFont(ofSize: 26, weight: .bold); stack.addArrangedSubview(title); let subtitle = NSTextField(labelWithString: "一键连接、临时启动；设备重启后自动回到原生界面"); subtitle.textColor = .secondaryLabelColor; stack.addArrangedSubview(subtitle)
+        let backdrop = NSVisualEffectView()
+        backdrop.material = .underWindowBackground
+        backdrop.blendingMode = .behindWindow
+        backdrop.state = .active
+
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 1580))
+        let scroll = NSScrollView()
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.documentView = content
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        backdrop.addSubview(scroll)
+        NSLayoutConstraint.activate([
+            scroll.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: backdrop.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor)
+        ])
+
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 14
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 32),
+            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -32),
+            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 28),
+            stack.widthAnchor.constraint(equalToConstant: 736)
+        ])
+
+        stack.addArrangedSubview(hero())
+        let statusHeading = NSTextField(labelWithString: "系统状态")
+        statusHeading.font = .systemFont(ofSize: 14, weight: .semibold)
+        statusHeading.textColor = .secondaryLabelColor
+        stack.addArrangedSubview(statusHeading)
+        let readinessRow = NSStackView(views: [
+            readinessChip("运行环境", symbol: "shippingbox.fill"),
+            readinessChip("Lark", symbol: "checkmark.seal.fill"),
+            readinessChip("TC002", symbol: "display.2"),
+            readinessChip("电脑助手", symbol: "bolt.horizontal.circle.fill")
+        ])
+        readinessRow.orientation = .horizontal
+        readinessRow.spacing = 10
+        readinessRow.distribution = .fillEqually
+        readinessRow.widthAnchor.constraint(equalToConstant: 736).isActive = true
+        readinessRow.heightAnchor.constraint(equalToConstant: 62).isActive = true
+        stack.addArrangedSubview(readinessRow)
+
         authorizeButton.target = self; authorizeButton.action = #selector(authorize)
-        environmentButton.target = self; environmentButton.action = #selector(checkEnvironment); stack.addArrangedSubview(section("1. 准备电脑", [hint("检查 Node.js、ADB、EMQX 和 TC002 运行包。"), buttonRow(environmentButton)]))
-        deviceButton.target = self; deviceButton.action = #selector(checkDevice); stack.addArrangedSubview(section("2. 连接 TC002", [row("时钟 IP", deviceField, "例如 192.168.1.131"), rowWithButton("电脑 IP", hostField, "局域网地址", "自动识别", #selector(detectHost)), buttonRow(deviceButton)]))
-        verifyLarkButton.target = self; verifyLarkButton.action = #selector(verifyLark); stack.addArrangedSubview(section("3. 授权 Lark", [row("App ID", appIDField, "Lark 自建应用 App ID"), row("App Secret", appSecretField, "只写入 macOS 钥匙串"), buttonGroup([authorizeButton, verifyLarkButton])]))
-        stack.addArrangedSubview(section("4. 专注设置", [row("专注（分钟）", focusField, "45"), row("休息（分钟）", restField, "5")]))
-        stack.addArrangedSubview(section("高级设置（通常无需修改）", [row("项目目录", repoField, "App 内置或 Git 仓库目录")]))
-        readinessField.maximumNumberOfLines = 0; readinessField.lineBreakMode = .byWordWrapping; readinessField.font = .systemFont(ofSize: 13); let readinessBox = NSBox(); readinessBox.title = "就绪状态"; readinessBox.contentViewMargins = NSSize(width: 12, height: 12); readinessBox.contentView = readinessField; readinessBox.widthAnchor.constraint(equalToConstant: 592).isActive = true; readinessBox.heightAnchor.constraint(equalToConstant: 116).isActive = true; stack.addArrangedSubview(readinessBox)
-        startButton.target = self; startButton.action = #selector(startFocus); startButton.keyEquivalent = "\r"; startButton.contentTintColor = .systemGreen; stopButton.target = self; stopButton.action = #selector(stopServices); rebootButton.target = self; rebootButton.action = #selector(reboot); rebootButton.contentTintColor = .systemRed
-        let actions = NSStackView(views: [startButton, stopButton]); actions.orientation = .horizontal; actions.spacing = 12; actions.distribution = .fillEqually; actions.widthAnchor.constraint(equalToConstant: 592).isActive = true; stack.addArrangedSubview(actions); rebootButton.widthAnchor.constraint(equalToConstant: 592).isActive = true; stack.addArrangedSubview(rebootButton)
-        statusField.maximumNumberOfLines = 0; statusField.lineBreakMode = .byWordWrapping; let statusBox = NSBox(); statusBox.title = "当前操作"; statusBox.contentViewMargins = NSSize(width: 12, height: 12); statusBox.contentView = statusField; statusBox.widthAnchor.constraint(equalToConstant: 592).isActive = true; statusBox.heightAnchor.constraint(equalToConstant: 76).isActive = true; stack.addArrangedSubview(statusBox)
-        logView.isEditable = false; logView.isRichText = false; logView.font = .monospacedSystemFont(ofSize: 11, weight: .regular); logView.textColor = .secondaryLabelColor; let logScroll = NSScrollView(); logScroll.hasVerticalScroller = true; logScroll.documentView = logView; logScroll.widthAnchor.constraint(equalToConstant: 592).isActive = true; logScroll.heightAnchor.constraint(equalToConstant: 150).isActive = true; stack.addArrangedSubview(logScroll)
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 820), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false); window.title = "TC002 专注助手"; window.contentView = scroll; window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
+        styleButton(authorizeButton, symbol: "person.badge.key.fill")
+        environmentButton.target = self; environmentButton.action = #selector(checkEnvironment)
+        styleButton(environmentButton, symbol: "checkmark.shield.fill")
+        stack.addArrangedSubview(section("准备电脑", step: "01", symbol: "desktopcomputer", accent: .systemBlue, height: 136, rows: [hint("检查 Node.js、ADB、EMQX 和已校验的 TC002 运行包。"), buttonRow(environmentButton)]))
+
+        deviceButton.target = self; deviceButton.action = #selector(checkDevice)
+        styleButton(deviceButton, symbol: "antenna.radiowaves.left.and.right")
+        stack.addArrangedSubview(section("连接 TC002", step: "02", symbol: "display.2", accent: .systemTeal, height: 176, rows: [row("时钟 IP", deviceField, "例如 192.168.1.131"), rowWithButton("电脑 IP", hostField, "局域网 IPv4", "自动识别", #selector(detectHost)), buttonRow(deviceButton)]))
+
+        verifyLarkButton.target = self; verifyLarkButton.action = #selector(verifyLark)
+        styleButton(verifyLarkButton, symbol: "checkmark.seal.fill")
+        stack.addArrangedSubview(section("授权 Lark", step: "03", symbol: "person.crop.circle.badge.checkmark", accent: .systemIndigo, height: 184, rows: [row("App ID", appIDField, "Lark 自建应用 App ID"), row("App Secret", appSecretField, "只写入 macOS 钥匙串"), buttonGroup([authorizeButton, verifyLarkButton])]))
+
+        stack.addArrangedSubview(section("专注节奏", step: "04", symbol: "timer", accent: .systemGreen, height: 146, rows: [row("专注（分钟）", focusField, "45"), row("休息（分钟）", restField, "5")]))
+        stack.addArrangedSubview(section("高级设置", step: "", symbol: "gearshape.fill", accent: .secondaryLabelColor, height: 108, rows: [row("项目目录", repoField, "App 内置或 Git 仓库目录")]))
+
+        startButton.target = self; startButton.action = #selector(startFocus); startButton.keyEquivalent = "\r"
+        stopButton.target = self; stopButton.action = #selector(stopServices)
+        rebootButton.target = self; rebootButton.action = #selector(reboot)
+        styleButton(startButton, symbol: "play.fill", primary: true)
+        styleButton(stopButton, symbol: "stop.circle.fill")
+        styleButton(rebootButton, symbol: "arrow.counterclockwise.circle.fill")
+        rebootButton.contentTintColor = .systemRed
+        startButton.toolTip = "验证配置并启动本机服务与 TC002 临时界面"
+        stopButton.toolTip = "停止 Mac 上的 EMQX、Lark bridge 和 MQTT adapter"
+        rebootButton.toolTip = "重启 TC002 并恢复设备原生界面"
+        let actions = NSStackView(views: [startButton, stopButton, rebootButton])
+        actions.orientation = .horizontal
+        actions.spacing = 12
+        actions.distribution = .fillEqually
+        actions.widthAnchor.constraint(equalToConstant: 736).isActive = true
+        actions.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        stack.addArrangedSubview(actions)
+
+        stack.addArrangedSubview(operationCard())
+        stack.addArrangedSubview(logCard())
+
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 840), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.title = "TC002 Focus Clock"
+        window.titlebarAppearsTransparent = false
+        window.minSize = NSSize(width: 800, height: 680)
+        window.contentView = backdrop
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
-    private func section(_ title: String, _ rows: [NSView]) -> NSBox {
-        let box = NSBox()
-        box.title = title
-        box.contentViewMargins = NSSize(width: 12, height: 12)
-        let inner = NSView()
+    private func hero() -> NSView {
+        let box = card()
+        box.widthAnchor.constraint(equalToConstant: 736).isActive = true
+        box.heightAnchor.constraint(equalToConstant: 132).isActive = true
+
+        let icon = NSImageView(image: symbol("timer", size: 36, weight: .semibold))
+        icon.contentTintColor = .systemGreen
+        icon.widthAnchor.constraint(equalToConstant: 48).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: 48).isActive = true
+
+        let title = NSTextField(labelWithString: "TC002 Focus Clock")
+        title.font = .systemFont(ofSize: 28, weight: .bold)
+        title.heightAnchor.constraint(greaterThanOrEqualToConstant: 36).isActive = true
+        let subtitle = NSTextField(labelWithString: "专注更清晰，状态自然同步")
+        subtitle.font = .systemFont(ofSize: 14, weight: .medium)
+        subtitle.textColor = .secondaryLabelColor
+        subtitle.heightAnchor.constraint(greaterThanOrEqualToConstant: 20).isActive = true
+        let badge = NSTextField(labelWithString: "  临时部署 · 不刷固件  ")
+        badge.font = .systemFont(ofSize: 11, weight: .semibold)
+        badge.textColor = .systemGreen
+        badge.wantsLayer = true
+        badge.layer?.cornerRadius = 8
+        badge.layer?.backgroundColor = NSColor.systemGreen.withAlphaComponent(0.10).cgColor
+        badge.heightAnchor.constraint(equalToConstant: 22).isActive = true
+        let copy = NSStackView(views: [title, subtitle, badge])
+        copy.orientation = .vertical
+        copy.alignment = .leading
+        copy.spacing = 5
+
+        let digits = NSTextField(labelWithString: "45:00")
+        digits.font = .monospacedDigitSystemFont(ofSize: 27, weight: .bold)
+        digits.textColor = NSColor(calibratedRed: 0.18, green: 0.90, blue: 0.46, alpha: 1)
+        digits.alignment = .center
+        let mode = NSTextField(labelWithString: "FOCUS  ●")
+        mode.font = .monospacedSystemFont(ofSize: 9, weight: .semibold)
+        mode.textColor = NSColor(calibratedRed: 0.18, green: 0.90, blue: 0.46, alpha: 0.85)
+        mode.alignment = .center
+        let displayStack = NSStackView(views: [digits, mode])
+        displayStack.orientation = .vertical
+        displayStack.alignment = .centerX
+        displayStack.spacing = 0
+        displayStack.wantsLayer = true
+        displayStack.layer?.backgroundColor = NSColor(calibratedWhite: 0.035, alpha: 1).cgColor
+        displayStack.layer?.cornerRadius = 12
+        displayStack.layer?.borderWidth = 1
+        displayStack.layer?.borderColor = NSColor.white.withAlphaComponent(0.08).cgColor
+        displayStack.widthAnchor.constraint(equalToConstant: 170).isActive = true
+        displayStack.heightAnchor.constraint(equalToConstant: 66).isActive = true
+
+        let row = NSStackView(views: [icon, copy, NSView(), displayStack])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 16
+        row.translatesAutoresizingMaskIntoConstraints = false
+        box.contentView?.addSubview(row)
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: box.contentView!.leadingAnchor, constant: 20),
+            row.trailingAnchor.constraint(equalTo: box.contentView!.trailingAnchor, constant: -20),
+            row.topAnchor.constraint(equalTo: box.contentView!.topAnchor, constant: 16),
+            row.bottomAnchor.constraint(equalTo: box.contentView!.bottomAnchor, constant: -16)
+        ])
+        return box
+    }
+
+    private func section(_ title: String, step: String, symbol symbolName: String, accent: NSColor, height: CGFloat, rows: [NSView]) -> NSBox {
+        let box = card()
+        let icon = NSImageView(image: symbol(symbolName, size: 16, weight: .semibold))
+        icon.contentTintColor = accent
+        icon.widthAnchor.constraint(equalToConstant: 22).isActive = true
+        let heading = NSTextField(labelWithString: title)
+        heading.font = .systemFont(ofSize: 16, weight: .semibold)
+        let badge = NSTextField(labelWithString: step)
+        badge.font = .monospacedDigitSystemFont(ofSize: 11, weight: .bold)
+        badge.textColor = accent
+        badge.alignment = .right
+        badge.widthAnchor.constraint(equalToConstant: 24).isActive = true
+        let header = NSStackView(views: [icon, heading, NSView(), badge])
+        header.orientation = .horizontal
+        header.alignment = .centerY
+        header.spacing = 8
+
         let rowsStack = NSStackView(views: rows)
         rowsStack.orientation = .vertical
         rowsStack.alignment = .leading
-        rowsStack.spacing = 8
-        rowsStack.translatesAutoresizingMaskIntoConstraints = false
-        inner.addSubview(rowsStack)
+        rowsStack.spacing = 10
+        let inner = NSStackView(views: [header, rowsStack])
+        inner.orientation = .vertical
+        inner.alignment = .leading
+        inner.spacing = 12
+        inner.translatesAutoresizingMaskIntoConstraints = false
+        box.contentView?.addSubview(inner)
         NSLayoutConstraint.activate([
-            rowsStack.leadingAnchor.constraint(equalTo: inner.leadingAnchor),
-            rowsStack.trailingAnchor.constraint(equalTo: inner.trailingAnchor),
-            rowsStack.topAnchor.constraint(equalTo: inner.topAnchor),
-            rowsStack.bottomAnchor.constraint(equalTo: inner.bottomAnchor)
+            inner.leadingAnchor.constraint(equalTo: box.contentView!.leadingAnchor, constant: 18),
+            inner.trailingAnchor.constraint(equalTo: box.contentView!.trailingAnchor, constant: -18),
+            inner.topAnchor.constraint(equalTo: box.contentView!.topAnchor, constant: 14),
+            inner.bottomAnchor.constraint(lessThanOrEqualTo: box.contentView!.bottomAnchor, constant: -14),
+            header.widthAnchor.constraint(equalTo: inner.widthAnchor),
+            rowsStack.widthAnchor.constraint(equalTo: inner.widthAnchor)
         ])
-        box.contentView = inner
-        box.widthAnchor.constraint(equalToConstant: 592).isActive = true
-        let rowCount = max(rows.count, 1)
-        let contentHeight = CGFloat(rowCount * 28 + max(rowCount - 1, 0) * 8)
-        box.heightAnchor.constraint(equalToConstant: contentHeight + 48).isActive = true
+        box.widthAnchor.constraint(equalToConstant: 736).isActive = true
+        box.heightAnchor.constraint(equalToConstant: height).isActive = true
         return box
     }
-    private func row(_ title: String, _ field: NSTextField, _ placeholder: String) -> NSView { field.placeholderString = placeholder; field.widthAnchor.constraint(equalToConstant: 360).isActive = true; field.heightAnchor.constraint(equalToConstant: 28).isActive = true; return rowLabel(title, field) }
-    private func rowWithButton(_ title: String, _ field: NSTextField, _ placeholder: String, _ buttonTitle: String, _ action: Selector) -> NSView { let row = NSStackView(); row.orientation = .horizontal; row.spacing = 8; field.placeholderString = placeholder; field.widthAnchor.constraint(equalToConstant: 270).isActive = true; field.heightAnchor.constraint(equalToConstant: 28).isActive = true; row.addArrangedSubview(label(title)); row.addArrangedSubview(field); row.addArrangedSubview(NSButton(title: buttonTitle, target: self, action: action)); return row }
-    private func rowLabel(_ title: String, _ view: NSView) -> NSView { let row = NSStackView(views: [label(title), view]); row.orientation = .horizontal; row.spacing = 8; return row }
-    private func label(_ text: String) -> NSTextField { let field = NSTextField(labelWithString: text); field.widthAnchor.constraint(equalToConstant: 100).isActive = true; field.heightAnchor.constraint(equalToConstant: 28).isActive = true; return field }
+
+    private func card() -> NSBox {
+        let box = NSBox()
+        box.boxType = .custom
+        box.titlePosition = .noTitle
+        box.cornerRadius = 14
+        box.borderWidth = 1
+        box.borderColor = NSColor.separatorColor.withAlphaComponent(0.45)
+        box.fillColor = NSColor.controlBackgroundColor.withAlphaComponent(0.80)
+        return box
+    }
+
+    private func readinessChip(_ title: String, symbol symbolName: String) -> NSBox {
+        let box = card()
+        box.cornerRadius = 11
+        let icon = NSImageView(image: symbol(symbolName, size: 15, weight: .semibold))
+        icon.contentTintColor = .tertiaryLabelColor
+        icon.widthAnchor.constraint(equalToConstant: 20).isActive = true
+        let value = NSTextField(labelWithString: title)
+        value.font = .systemFont(ofSize: 12, weight: .semibold)
+        value.textColor = .secondaryLabelColor
+        value.lineBreakMode = .byTruncatingTail
+        let row = NSStackView(views: [icon, value])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 6
+        row.translatesAutoresizingMaskIntoConstraints = false
+        box.contentView?.addSubview(row)
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: box.contentView!.leadingAnchor, constant: 12),
+            row.trailingAnchor.constraint(lessThanOrEqualTo: box.contentView!.trailingAnchor, constant: -10),
+            row.centerYAnchor.constraint(equalTo: box.contentView!.centerYAnchor)
+        ])
+        readinessCards.append(box); readinessIcons.append(icon); readinessLabels.append(value)
+        return box
+    }
+
+    private func operationCard() -> NSBox {
+        let box = card()
+        box.widthAnchor.constraint(equalToConstant: 736).isActive = true
+        box.heightAnchor.constraint(equalToConstant: 84).isActive = true
+        operationIcon.image = symbol("info.circle.fill", size: 20, weight: .semibold)
+        operationIcon.contentTintColor = .systemBlue
+        operationIcon.widthAnchor.constraint(equalToConstant: 28).isActive = true
+        statusField.maximumNumberOfLines = 2
+        statusField.lineBreakMode = .byWordWrapping
+        statusField.font = .systemFont(ofSize: 14, weight: .medium)
+        busyIndicator.style = .spinning
+        busyIndicator.controlSize = .small
+        busyIndicator.isDisplayedWhenStopped = false
+        let row = NSStackView(views: [operationIcon, statusField, NSView(), busyIndicator])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 10
+        row.translatesAutoresizingMaskIntoConstraints = false
+        box.contentView?.addSubview(row)
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: box.contentView!.leadingAnchor, constant: 18),
+            row.trailingAnchor.constraint(equalTo: box.contentView!.trailingAnchor, constant: -18),
+            row.centerYAnchor.constraint(equalTo: box.contentView!.centerYAnchor)
+        ])
+        return box
+    }
+
+    private func logCard() -> NSBox {
+        let box = card()
+        box.widthAnchor.constraint(equalToConstant: 736).isActive = true
+        box.heightAnchor.constraint(equalToConstant: 220).isActive = true
+        let title = NSTextField(labelWithString: "运行日志")
+        title.font = .systemFont(ofSize: 14, weight: .semibold)
+        let detail = NSTextField(labelWithString: "凭据不会写入日志")
+        detail.font = .systemFont(ofSize: 11)
+        detail.textColor = .tertiaryLabelColor
+        let clear = NSButton(title: "清空", target: self, action: #selector(clearLog))
+        clear.bezelStyle = .inline
+        clear.controlSize = .small
+        let header = NSStackView(views: [title, detail, NSView(), clear])
+        header.orientation = .horizontal
+        header.alignment = .centerY
+        header.spacing = 8
+        logView.isEditable = false
+        logView.isRichText = false
+        logView.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        logView.textColor = .secondaryLabelColor
+        logView.backgroundColor = NSColor.textBackgroundColor.withAlphaComponent(0.55)
+        logView.textContainerInset = NSSize(width: 10, height: 9)
+        let logScroll = NSScrollView()
+        logScroll.drawsBackground = false
+        logScroll.borderType = .noBorder
+        logScroll.hasVerticalScroller = true
+        logScroll.autohidesScrollers = true
+        logScroll.documentView = logView
+        logScroll.wantsLayer = true
+        logScroll.layer?.cornerRadius = 9
+        logScroll.layer?.masksToBounds = true
+        let inner = NSStackView(views: [header, logScroll])
+        inner.orientation = .vertical
+        inner.alignment = .leading
+        inner.spacing = 10
+        inner.translatesAutoresizingMaskIntoConstraints = false
+        box.contentView?.addSubview(inner)
+        NSLayoutConstraint.activate([
+            inner.leadingAnchor.constraint(equalTo: box.contentView!.leadingAnchor, constant: 16),
+            inner.trailingAnchor.constraint(equalTo: box.contentView!.trailingAnchor, constant: -16),
+            inner.topAnchor.constraint(equalTo: box.contentView!.topAnchor, constant: 14),
+            inner.bottomAnchor.constraint(equalTo: box.contentView!.bottomAnchor, constant: -14),
+            header.widthAnchor.constraint(equalTo: inner.widthAnchor),
+            logScroll.widthAnchor.constraint(equalTo: inner.widthAnchor),
+            logScroll.heightAnchor.constraint(equalToConstant: 158)
+        ])
+        return box
+    }
+
+    private func row(_ title: String, _ field: NSTextField, _ placeholder: String) -> NSView {
+        configureField(field, placeholder: placeholder, width: 520)
+        return rowLabel(title, field)
+    }
+    private func rowWithButton(_ title: String, _ field: NSTextField, _ placeholder: String, _ buttonTitle: String, _ action: Selector) -> NSView {
+        let row = NSStackView(); row.orientation = .horizontal; row.spacing = 10
+        configureField(field, placeholder: placeholder, width: 398)
+        let button = NSButton(title: buttonTitle, target: self, action: action)
+        button.bezelStyle = .rounded; button.controlSize = .large
+        button.image = symbol("location.fill", size: 12, weight: .medium)
+        button.imagePosition = .imageLeading
+        button.widthAnchor.constraint(equalToConstant: 112).isActive = true
+        row.addArrangedSubview(label(title)); row.addArrangedSubview(field); row.addArrangedSubview(button)
+        return row
+    }
+    private func configureField(_ field: NSTextField, placeholder: String, width: CGFloat) {
+        field.placeholderString = placeholder
+        field.bezelStyle = .roundedBezel
+        field.controlSize = .large
+        field.font = .systemFont(ofSize: 13)
+        field.widthAnchor.constraint(equalToConstant: width).isActive = true
+        field.heightAnchor.constraint(equalToConstant: 30).isActive = true
+    }
+    private func rowLabel(_ title: String, _ view: NSView) -> NSView { let row = NSStackView(views: [label(title), view]); row.orientation = .horizontal; row.alignment = .centerY; row.spacing = 10; return row }
+    private func label(_ text: String) -> NSTextField { let field = NSTextField(labelWithString: text); field.font = .systemFont(ofSize: 13, weight: .medium); field.textColor = .secondaryLabelColor; field.widthAnchor.constraint(equalToConstant: 142).isActive = true; field.heightAnchor.constraint(equalToConstant: 30).isActive = true; return field }
     private func buttonRow(_ button: NSButton) -> NSView { button }
-    private func buttonGroup(_ buttons: [NSButton]) -> NSView { let row = NSStackView(views: buttons); row.orientation = .horizontal; row.spacing = 8; return row }
-    private func hint(_ text: String) -> NSView { let value = NSTextField(labelWithString: text); value.textColor = .secondaryLabelColor; value.maximumNumberOfLines = 0; value.widthAnchor.constraint(equalToConstant: 560).isActive = true; return value }
+    private func buttonGroup(_ buttons: [NSButton]) -> NSView { let row = NSStackView(views: buttons); row.orientation = .horizontal; row.spacing = 10; return row }
+    private func hint(_ text: String) -> NSView { let value = NSTextField(labelWithString: text); value.textColor = .secondaryLabelColor; value.font = .systemFont(ofSize: 13); value.maximumNumberOfLines = 0; value.widthAnchor.constraint(equalToConstant: 680).isActive = true; return value }
+    private func styleButton(_ button: NSButton, symbol symbolName: String, primary: Bool = false) {
+        button.bezelStyle = .rounded
+        button.controlSize = .large
+        button.font = .systemFont(ofSize: 13, weight: primary ? .semibold : .medium)
+        button.image = symbol(symbolName, size: 13, weight: .semibold)
+        button.imagePosition = .imageLeading
+        button.heightAnchor.constraint(greaterThanOrEqualToConstant: primary ? 40 : 34).isActive = true
+        if primary { button.bezelColor = .systemGreen; button.contentTintColor = .systemGreen }
+    }
+    private func symbol(_ name: String, size: CGFloat, weight: NSFont.Weight) -> NSImage {
+        let configuration = NSImage.SymbolConfiguration(pointSize: size, weight: weight)
+        return (NSImage(systemSymbolName: name, accessibilityDescription: nil) ?? NSImage()).withSymbolConfiguration(configuration) ?? NSImage()
+    }
     private func collectFields() { model.deviceIP = deviceField.stringValue; model.hostIP = hostField.stringValue; model.focusMinutes = focusField.stringValue; model.restMinutes = restField.stringValue; model.appID = appIDField.stringValue; model.appSecret = appSecretField.stringValue; model.repoPath = repoField.stringValue }
     private func populateFieldsFromModel() { deviceField.stringValue = model.deviceIP; hostField.stringValue = model.hostIP; focusField.stringValue = model.focusMinutes; restField.stringValue = model.restMinutes; appIDField.stringValue = model.appID; repoField.stringValue = model.repoPath }
-    private func refresh() { DispatchQueue.main.async { self.statusField.stringValue = self.model.status; self.readinessField.stringValue = self.model.readinessSummary; self.logView.string = self.model.logText; self.logView.scrollToEndOfDocument(nil); self.authorizeButton.title = self.model.isAuthorized ? "重新授权 Lark" : "授权 Lark"; self.authorizeButton.isEnabled = !self.model.isBusy; self.environmentButton.isEnabled = !self.model.isBusy; self.deviceButton.isEnabled = !self.model.isBusy; self.verifyLarkButton.isEnabled = !self.model.isBusy && self.model.isAuthorized; self.startButton.isEnabled = !self.model.isBusy && self.model.isAuthorized; self.stopButton.isEnabled = !self.model.isBusy && self.model.areServicesRunning; self.rebootButton.isEnabled = !self.model.isBusy; if self.model.appSecret.isEmpty && self.model.isAuthorized && !self.model.isBusy { self.appSecretField.stringValue = "" } } }
+    private func updateReadiness(_ index: Int, title: String, ready: Bool, partial: Bool = false) {
+        guard readinessLabels.indices.contains(index) else { return }
+        let color: NSColor = ready ? .systemGreen : (partial ? .systemOrange : .tertiaryLabelColor)
+        readinessLabels[index].stringValue = title
+        readinessLabels[index].textColor = ready || partial ? color : .secondaryLabelColor
+        readinessIcons[index].contentTintColor = color
+        readinessCards[index].fillColor = color.withAlphaComponent(ready || partial ? 0.09 : 0.025)
+        readinessCards[index].borderColor = color.withAlphaComponent(ready || partial ? 0.35 : 0.18)
+    }
+    private func refresh() {
+        DispatchQueue.main.async {
+            self.statusField.stringValue = self.model.status
+            self.logView.string = self.model.logText
+            self.logView.scrollToEndOfDocument(nil)
+            self.updateReadiness(0, title: self.model.isEnvironmentReady ? "环境就绪" : "待检查环境", ready: self.model.isEnvironmentReady)
+            self.updateReadiness(1, title: self.model.isLarkVerified ? "Lark 已验证" : (self.model.isAuthorized ? "Lark 待验证" : "待授权 Lark"), ready: self.model.isLarkVerified, partial: self.model.isAuthorized)
+            self.updateReadiness(2, title: self.model.isDeviceReachable ? "TC002 已连接" : "待连接 TC002", ready: self.model.isDeviceReachable)
+            self.updateReadiness(3, title: self.model.areServicesRunning ? "助手运行中" : "助手未启动", ready: self.model.areServicesRunning)
+            self.operationIcon.image = self.symbol(self.model.isBusy ? "clock.arrow.circlepath" : (self.model.status.contains("失败") || self.model.status.contains("未通过") || self.model.status.contains("未完成") ? "exclamationmark.triangle.fill" : "info.circle.fill"), size: 20, weight: .semibold)
+            self.operationIcon.contentTintColor = self.model.isBusy ? .systemBlue : (self.model.status.contains("失败") || self.model.status.contains("未通过") || self.model.status.contains("未完成") ? .systemOrange : .systemGreen)
+            if self.model.isBusy { self.busyIndicator.startAnimation(nil) } else { self.busyIndicator.stopAnimation(nil) }
+            self.authorizeButton.title = self.model.isAuthorized ? "重新授权 Lark" : "授权 Lark"
+            self.authorizeButton.isEnabled = !self.model.isBusy
+            self.environmentButton.isEnabled = !self.model.isBusy
+            self.deviceButton.isEnabled = !self.model.isBusy
+            self.verifyLarkButton.isEnabled = !self.model.isBusy && self.model.isAuthorized
+            self.startButton.isEnabled = !self.model.isBusy && self.model.isAuthorized
+            self.stopButton.isEnabled = !self.model.isBusy && self.model.areServicesRunning
+            self.rebootButton.isEnabled = !self.model.isBusy
+            if self.model.appSecret.isEmpty && self.model.isAuthorized && !self.model.isBusy { self.appSecretField.stringValue = "" }
+        }
+    }
     @objc private func detectHost() { collectFields(); model.detectHost(); hostField.stringValue = model.hostIP }
     @objc private func checkEnvironment() { collectFields(); model.checkEnvironment() }
     @objc private func checkDevice() { collectFields(); model.checkDevice() }
@@ -448,6 +791,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func authorize() { collectFields(); model.authorizeLark() }
     @objc private func startFocus() { collectFields(); model.startFocus() }
     @objc private func stopServices() { model.stopComputerServices() }
+    @objc private func clearLog() { model.logText = ""; model.onChange?() }
     @objc private func reboot() { let alert = NSAlert(); alert.messageText = "确认重启时钟？"; alert.informativeText = "重启只会让临时程序消失，不会刷写固件。"; alert.addButton(withTitle: "重启"); alert.addButton(withTitle: "取消"); if alert.runModal() == .alertFirstButtonReturn { collectFields(); model.rebootDevice() } }
     private func offerEnvironmentInstall(packages: [String], reason: String) {
         let displayNames = packages.map { $0 == "node" ? "Node.js 24+" : ($0 == "android-platform-tools" ? "ADB" : $0.uppercased()) }
