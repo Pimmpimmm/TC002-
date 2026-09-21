@@ -1,13 +1,16 @@
 # TC002 专注助手（macOS GUI）
 
-这是统一入口的原生 macOS 前端。它把原来需要分别执行的动作收进一个窗口：
+这是统一入口的原生 macOS 前端。界面按“准备电脑 → 连接 TC002 → 授权 Lark → 专注设置”四步引导：
 
-1. 填写时钟 IP、电脑 IP、专注/休息分钟数；
-2. 填写本人的 Lark App ID 和 App Secret，点击“授权 Lark”；
-3. 点击“启动专注时钟”；
-4. 应用自动安装/启动本机 EMQX、Lark bridge、MQTT adapter，写入设备时长，
+1. 检查 Node.js、ADB、EMQX 和设备运行包；
+2. 填写时钟 IP，自动识别电脑 IP，并可单独测试 ADB 连接；
+3. 填写 Lark App ID 和 App Secret，完成授权后可单独验证系统状态权限；
+4. 设置专注/休息分钟数，点击“启动专注时钟”；
+5. 应用自动安装/启动本机 EMQX、Lark bridge、MQTT adapter，写入设备时长，
    并把临时 Focus bundle 推到 `/tmp`；
-5. 点击“恢复原生界面”会重启时钟。重启只清掉临时程序，不刷写固件。
+6. 点击“恢复原生界面”会重启时钟。重启只清掉临时程序，不刷写固件。
+
+界面会显示环境、Lark、TC002 和后台服务的独立就绪状态。OAuth 输出会实时出现在日志区，启动时会按 1/4–4/4 显示当前进度。
 
 Lark App Secret、OAuth token、refresh token 和 bridge shared secret 不写入 GUI
 配置文件，仍由现有 bridge 写入 macOS 钥匙串。GUI 配置文件只保存设备 IP、时长、
