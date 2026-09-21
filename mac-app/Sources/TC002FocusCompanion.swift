@@ -16,6 +16,25 @@ enum RunnerError: LocalizedError {
     var errorDescription: String? { if case .failed(let message) = self { return message }; return nil }
 }
 
+enum EnvironmentError: LocalizedError {
+    case missingTool(name: String, brewPackage: String)
+    case nodeTooOld(version: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingTool(let name, _): return "未找到 \(name)"
+        case .nodeTooOld(let version): return "需要 Node.js 24 或更高版本，当前为 \(version)"
+        }
+    }
+
+    var brewPackages: [String] {
+        switch self {
+        case .missingTool(_, let package): return [package]
+        case .nodeTooOld: return ["node"]
+        }
+    }
+}
+
 final class AppModel {
     var deviceIP = ""
     var hostIP = ""
@@ -33,6 +52,7 @@ final class AppModel {
     var isDeviceReachable = false
     var areServicesRunning = false
     var onChange: (() -> Void)?
+    var onEnvironmentInstallOffer: (([String], String) -> Void)?
     private var oauthProcess: Process?
 
     func load() {
@@ -85,7 +105,38 @@ final class AppModel {
                 try Self.preflight(repo: repo)
                 self.updateOnMain { self.isEnvironmentReady = true; self.isBusy = false; self.status = "运行环境检查通过"; self.appendLog("环境检查：Node.js、ADB、EMQX 和 TC002 运行包均正常。"); self.notify() }
             } catch {
-                self.updateOnMain { self.isEnvironmentReady = false; self.isBusy = false; self.status = "环境检查未通过"; self.appendLog(error.localizedDescription); self.notify() }
+                self.updateOnMain {
+                    self.isEnvironmentReady = false; self.isBusy = false
+                    let message = Self.friendlyError(error.localizedDescription)
+                    self.status = "环境检查未通过：\(error.localizedDescription)"
+                    self.appendLog(message); self.notify()
+                    if let issue = error as? EnvironmentError { self.onEnvironmentInstallOffer?(issue.brewPackages, message) }
+                }
+            }
+        }
+    }
+
+    func installEnvironment(packages: [String]) {
+        guard !isBusy else { return }
+        guard let brew = Self.resolvedExecutable("brew", preferred: ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]) else {
+            status = "未找到 Homebrew，无法自动安装"
+            appendLog("请先从 https://brew.sh 安装 Homebrew，再重新检查运行环境。")
+            notify(); return
+        }
+        let uniquePackages = Array(Set(packages)).sorted()
+        guard !uniquePackages.isEmpty else { return }
+        isBusy = true; status = "正在安装：\(uniquePackages.joined(separator: "、"))…"; notify()
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                for package in uniquePackages {
+                    let args = package == "android-platform-tools" ? ["install", "--cask", package] : ["install", package]
+                    let output = try Self.run(brew, args: args)
+                    self.updateOnMain { self.appendLog(output); self.notify() }
+                }
+                try Self.preflight(repo: self.repoPath)
+                self.updateOnMain { self.isEnvironmentReady = true; self.isBusy = false; self.status = "安装完成，运行环境检查通过"; self.appendLog("缺少的组件已经安装并验证通过。"); self.notify() }
+            } catch {
+                self.updateOnMain { self.isEnvironmentReady = false; self.isBusy = false; self.status = "自动安装未完成"; self.appendLog(Self.friendlyError(error.localizedDescription)); self.notify() }
             }
         }
     }
@@ -169,7 +220,14 @@ final class AppModel {
                 self.updateOnMain { self.appendLog(configure); self.isDeviceReachable = true; self.notify() }
                 let launch = try Self.run("/bin/bash", args: [repo + "/companion/start-focus.sh", "--adb-target", device], cwd: repo)
                 self.updateOnMain { self.appendLog(launch); self.isBusy = false; self.status = "专注时钟已启动；设备重启后恢复原生界面"; self.notify() }
-            } catch { self.updateOnMain { self.isBusy = false; self.status = "启动未完成，请查看下方处理建议"; self.appendLog(Self.friendlyError(error.localizedDescription)); self.notify() } }
+            } catch {
+                self.updateOnMain {
+                    self.isBusy = false; self.status = "启动未完成，请查看下方处理建议"
+                    let message = Self.friendlyError(error.localizedDescription)
+                    self.appendLog(message); self.notify()
+                    if let issue = error as? EnvironmentError { self.onEnvironmentInstallOffer?(issue.brewPackages, message) }
+                }
+            }
         }
     }
 
@@ -266,18 +324,50 @@ final class AppModel {
         for relative in required where !FileManager.default.fileExists(atPath: repo + "/" + relative) {
             throw RunnerError.failed("发布包不完整，缺少 \(relative)")
         }
-        let node = nodePath()
-        let nodeArgs = node == "/usr/bin/env" ? ["node", "-p", "process.versions.node.split('.')[0]"] : ["-p", "process.versions.node.split('.')[0]"]
-        let nodeMajor = Int(try run(node, args: nodeArgs).trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
-        guard nodeMajor >= 24 else { throw RunnerError.failed("需要 Node.js 24 或更高版本") }
-        let adb = adbPath()
-        _ = try run(adb, args: adb == "/usr/bin/env" ? ["adb", "version"] : ["version"])
-        _ = try run("/usr/bin/env", args: ["brew", "--prefix", "emqx"])
+        guard let node = resolvedNodePath() else { throw EnvironmentError.missingTool(name: "Node.js 24+", brewPackage: "node") }
+        let nodeVersion = try run(node, args: ["--version"]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let nodeMajor = Int(nodeVersion.drop(while: { !$0.isNumber }).prefix(while: { $0.isNumber })) ?? 0
+        guard nodeMajor >= 24 else { throw EnvironmentError.nodeTooOld(version: nodeVersion) }
+        guard let adb = resolvedExecutable("adb", preferred: ["/opt/homebrew/bin/adb", "/usr/local/bin/adb", "/usr/bin/adb"]) else { throw EnvironmentError.missingTool(name: "ADB", brewPackage: "android-platform-tools") }
+        _ = try run(adb, args: ["version"])
+        guard let brew = resolvedExecutable("brew", preferred: ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]) else { throw RunnerError.failed("未找到 Homebrew；无法定位或自动安装 EMQX") }
+        do { _ = try run(brew, args: ["--prefix", "emqx"]) }
+        catch { throw EnvironmentError.missingTool(name: "EMQX", brewPackage: "emqx") }
         _ = try run("/bin/bash", args: [repo + "/companion/verify-runtime-bundle.sh"], cwd: repo)
     }
-    private static func adbPath() -> String { ["/opt/homebrew/bin/adb", "/usr/local/bin/adb", "/usr/bin/adb"].first { FileManager.default.isExecutableFile(atPath: $0) } ?? "/usr/bin/env" }
-    private static func nodePath() -> String { ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node"].first { FileManager.default.isExecutableFile(atPath: $0) } ?? "/usr/bin/env" }
-    private static func toolPath() -> String { "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" }
+    private static func adbPath() -> String { resolvedExecutable("adb", preferred: ["/opt/homebrew/bin/adb", "/usr/local/bin/adb", "/usr/bin/adb"]) ?? "/usr/bin/env" }
+    private static func nodePath() -> String { resolvedNodePath() ?? "/usr/bin/env" }
+    private static func resolvedNodePath() -> String? {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        var candidates = [
+            "/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node",
+            home + "/.local/bin/node", home + "/.volta/bin/node", home + "/.local/share/mise/shims/node"
+        ]
+        let roots = [home + "/.local/node", home + "/.nvm/versions/node"]
+        for root in roots {
+            if let entries = try? FileManager.default.contentsOfDirectory(atPath: root) {
+                candidates.append(contentsOf: entries.sorted().reversed().map { root + "/" + $0 + "/bin/node" })
+            }
+        }
+        let fnmRoot = home + "/Library/Application Support/fnm/node-versions"
+        if let entries = try? FileManager.default.contentsOfDirectory(atPath: fnmRoot) {
+            candidates.append(contentsOf: entries.sorted().reversed().map { fnmRoot + "/" + $0 + "/installation/bin/node" })
+        }
+        return resolvedExecutable("node", preferred: candidates)
+    }
+    private static func resolvedExecutable(_ name: String, preferred: [String]) -> String? {
+        var candidates = preferred
+        let environmentPath = ProcessInfo.processInfo.environment["PATH"] ?? ""
+        candidates.append(contentsOf: environmentPath.split(separator: ":").map { String($0) + "/" + name })
+        var seen = Set<String>()
+        return candidates.first { seen.insert($0).inserted && FileManager.default.isExecutableFile(atPath: $0) }
+    }
+    private static func toolPath() -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let paths = [resolvedNodePath().map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }, home + "/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"].compactMap { $0 }
+        let uniquePaths = NSOrderedSet(array: paths).array.compactMap { $0 as? String }
+        return uniquePaths.joined(separator: ":")
+    }
     private static func friendlyError(_ message: String) -> String {
         if message.contains("找不到 EMQX") || message.contains("brew --prefix emqx") { return "EMQX 未安装。请先运行一键准备，或执行 brew install emqx。\n\(message)" }
         if message.contains("ADB") || message.contains("adb") { return "无法连接 TC002。请确认时钟已开启 Wi-Fi ADB，且与 Mac 在同一局域网。\n\(message)" }
@@ -294,7 +384,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let environmentButton = NSButton(title: "检查运行环境", target: nil, action: nil); private let deviceButton = NSButton(title: "测试时钟连接", target: nil, action: nil); private let verifyLarkButton = NSButton(title: "验证 Lark 配置", target: nil, action: nil)
 
     static func main() { let app = NSApplication.shared; let delegate = AppDelegate(); app.delegate = delegate; app.setActivationPolicy(.regular); withExtendedLifetime(delegate) { app.run() } }
-    func applicationDidFinishLaunching(_ notification: Notification) { model.onChange = { [weak self] in self?.refresh() }; buildWindow(); model.load(); populateFieldsFromModel(); refresh() }
+    func applicationDidFinishLaunching(_ notification: Notification) { model.onChange = { [weak self] in self?.refresh() }; model.onEnvironmentInstallOffer = { [weak self] packages, message in self?.offerEnvironmentInstall(packages: packages, reason: message) }; buildWindow(); model.load(); populateFieldsFromModel(); refresh() }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationWillTerminate(_ notification: Notification) { collectFields(); model.save() }
 
@@ -359,4 +449,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func startFocus() { collectFields(); model.startFocus() }
     @objc private func stopServices() { model.stopComputerServices() }
     @objc private func reboot() { let alert = NSAlert(); alert.messageText = "确认重启时钟？"; alert.informativeText = "重启只会让临时程序消失，不会刷写固件。"; alert.addButton(withTitle: "重启"); alert.addButton(withTitle: "取消"); if alert.runModal() == .alertFirstButtonReturn { collectFields(); model.rebootDevice() } }
+    private func offerEnvironmentInstall(packages: [String], reason: String) {
+        let displayNames = packages.map { $0 == "node" ? "Node.js 24+" : ($0 == "android-platform-tools" ? "ADB" : $0.uppercased()) }
+        let alert = NSAlert(); alert.alertStyle = .warning; alert.messageText = "缺少运行组件"
+        alert.informativeText = "\(reason)\n\n是否使用 Homebrew 安装：\(displayNames.joined(separator: "、"))？"
+        alert.addButton(withTitle: "安装"); alert.addButton(withTitle: "暂不安装")
+        if alert.runModal() == .alertFirstButtonReturn { model.installEnvironment(packages: packages) }
+    }
 }

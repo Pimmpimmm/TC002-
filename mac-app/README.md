@@ -12,6 +12,8 @@
 
 界面会显示环境、Lark、TC002 和后台服务的独立就绪状态。OAuth 输出会实时出现在日志区，启动时会按 1/4–4/4 显示当前进度。
 
+环境检查会识别 Homebrew、`~/.local`、nvm、fnm、Volta 和 mise 等常见 Node.js 安装位置，不依赖 Finder 是否加载终端的 `.zshrc`。如果确实缺少 Node.js、ADB 或 EMQX，界面会说明缺少的组件，并在用户确认后使用 Homebrew 安装。
+
 Lark App Secret、OAuth token、refresh token 和 bridge shared secret 不写入 GUI
 配置文件，仍由现有 bridge 写入 macOS 钥匙串。GUI 配置文件只保存设备 IP、时长、
 项目目录。用户 `open_id` 和“专注中”状态 ID 在授权时自动获取。
