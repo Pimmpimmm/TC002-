@@ -564,15 +564,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         icon.widthAnchor.constraint(equalToConstant: 22).isActive = true
         let heading = NSTextField(labelWithString: title)
         heading.font = .systemFont(ofSize: 16, weight: .semibold)
+        heading.usesSingleLineMode = true
+        heading.lineBreakMode = .byClipping
+        heading.setContentHuggingPriority(.required, for: .horizontal)
+        heading.setContentCompressionResistancePriority(.required, for: .horizontal)
+        heading.heightAnchor.constraint(greaterThanOrEqualToConstant: 24).isActive = true
         let badge = NSTextField(labelWithString: step)
         badge.font = .monospacedDigitSystemFont(ofSize: 11, weight: .bold)
         badge.textColor = accent
         badge.alignment = .right
+        badge.setContentCompressionResistancePriority(.required, for: .horizontal)
         badge.widthAnchor.constraint(equalToConstant: 24).isActive = true
         let header = NSStackView(views: [icon, heading, NSView(), badge])
         header.orientation = .horizontal
         header.alignment = .centerY
         header.spacing = 8
+        header.heightAnchor.constraint(greaterThanOrEqualToConstant: 26).isActive = true
 
         let rowsStack = NSStackView(views: rows)
         rowsStack.orientation = .vertical
@@ -666,16 +673,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         box.heightAnchor.constraint(equalToConstant: 220).isActive = true
         let title = NSTextField(labelWithString: "运行日志")
         title.font = .systemFont(ofSize: 14, weight: .semibold)
-        let detail = NSTextField(labelWithString: "凭据不会写入日志")
-        detail.font = .systemFont(ofSize: 11)
-        detail.textColor = .tertiaryLabelColor
+        title.usesSingleLineMode = true
+        title.setContentHuggingPriority(.required, for: .horizontal)
+        title.setContentCompressionResistancePriority(.required, for: .horizontal)
+        title.heightAnchor.constraint(greaterThanOrEqualToConstant: 22).isActive = true
+        let detail = NSTextField(labelWithString: "  不记录凭据  ")
+        detail.font = .systemFont(ofSize: 10, weight: .medium)
+        detail.textColor = .secondaryLabelColor
+        detail.alignment = .center
+        detail.wantsLayer = true
+        detail.layer?.cornerRadius = 7
+        detail.layer?.backgroundColor = NSColor.secondaryLabelColor.withAlphaComponent(0.08).cgColor
+        detail.setContentHuggingPriority(.required, for: .horizontal)
+        detail.setContentCompressionResistancePriority(.required, for: .horizontal)
+        detail.heightAnchor.constraint(equalToConstant: 20).isActive = true
         let clear = NSButton(title: "清空", target: self, action: #selector(clearLog))
         clear.bezelStyle = .inline
         clear.controlSize = .small
-        let header = NSStackView(views: [title, detail, NSView(), clear])
+        let header = NSStackView(views: [title, NSView(), detail, clear])
         header.orientation = .horizontal
         header.alignment = .centerY
-        header.spacing = 8
+        header.spacing = 10
+        header.heightAnchor.constraint(greaterThanOrEqualToConstant: 24).isActive = true
         logView.isEditable = false
         logView.isRichText = false
         logView.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
