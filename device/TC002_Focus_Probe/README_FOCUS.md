@@ -11,7 +11,7 @@ official `Z21_TC002_Demo` (GPL-3.0-or-later).
   `reason=rotate_away`.
 - Network work runs on a worker thread; the key/UI thread never waits for MQTT.
 - Failed MQTT events remain ordered in a small in-memory retry queue.
-- Focus and rest completion stop on a red prompt (`该休息了` / `该工作了`);
+- Focus and rest completion stop on a red `GO REST` / `GO WORK` prompt;
   the middle button is required to enter the next phase.
 - READY is white, FOCUS is green, and REST is blue. The countdown does not
   flash red near its end.
