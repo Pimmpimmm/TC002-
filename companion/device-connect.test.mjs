@@ -65,3 +65,25 @@ test('a failed first ADB connection stops before any device write', async () => 
     await rm(mock.directory, { recursive: true, force: true });
   }
 });
+
+test('a selected MP3 overrides the bundled completion audio at launch', async () => {
+  const mock = await fakeAdb();
+  const customAudio = path.join(mock.directory, 'custom.mp3');
+  await writeFile(customAudio, Buffer.from('ID3\u0004\u0000\u0000custom-audio'));
+  try {
+    const result = spawnSync('/bin/bash', [
+      path.join(repo, 'companion/start-focus.sh'),
+      '--adb-target', '192.0.2.131:5555',
+      '--audio', customAudio
+    ], {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${mock.directory}:/usr/bin:/bin`, ADB_TEST_LOG: mock.log }
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const calls = (await readFile(mock.log, 'utf8')).trim().split('\n');
+    assert.ok(calls.some((call) => call === `-s 192.0.2.131:5555 push ${customAudio} /tmp/ui/audio/focus_done.mp3`));
+    assert.match(result.stdout, /已使用自定义提示音：custom\.mp3/);
+  } finally {
+    await rm(mock.directory, { recursive: true, force: true });
+  }
+});

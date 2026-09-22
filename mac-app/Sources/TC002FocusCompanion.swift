@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import UniformTypeIdentifiers
 
 private let keychainService = "tc002-focus-bridge"
 
@@ -9,6 +10,7 @@ struct StoredConfig: Codable {
     var focusMinutes = "45"
     var restMinutes = "5"
     var repoPath = ""
+    var customAudioName: String? = nil
 }
 
 enum RunnerError: LocalizedError {
@@ -41,6 +43,7 @@ final class AppModel {
     var focusMinutes = "45"
     var restMinutes = "5"
     var repoPath = ""
+    var customAudioName = ""
     var appID = ""
     var appSecret = ""
     var status = "等待配置"
@@ -57,6 +60,10 @@ final class AppModel {
     private var oauthProcess: Process?
     private var restartOAuthWhenStopped = false
 
+    private var customAudioURL: URL { supportDirectory().appendingPathComponent("focus_done.mp3") }
+    var hasCustomAudio: Bool { FileManager.default.fileExists(atPath: customAudioURL.path) }
+    var customAudioStatus: String { hasCustomAudio ? "已选择：\(customAudioName.isEmpty ? "自定义提示音" : customAudioName)" : "当前使用默认提示音" }
+
     var isOAuthRunning: Bool { oauthProcess?.isRunning == true }
     var isReadyToStart: Bool {
         isEnvironmentReady && isLarkVerified && isDeviceReachable
@@ -68,8 +75,9 @@ final class AppModel {
         let defaults = FileManager.default.currentDirectoryPath
         let configURL = supportDirectory().appendingPathComponent("config.json")
         if let data = try? Data(contentsOf: configURL), let config = try? JSONDecoder().decode(StoredConfig.self, from: data) {
-            deviceIP = config.deviceIP; hostIP = config.hostIP; focusMinutes = config.focusMinutes; restMinutes = config.restMinutes; repoPath = config.repoPath
+            deviceIP = config.deviceIP; hostIP = config.hostIP; focusMinutes = config.focusMinutes; restMinutes = config.restMinutes; repoPath = config.repoPath; customAudioName = config.customAudioName ?? ""
         }
+        if !hasCustomAudio { customAudioName = "" }
         if repoPath.isEmpty || !FileManager.default.fileExists(atPath: repoPath) {
             let bundled = Bundle.main.resourceURL?.appendingPathComponent("tc002-repo").path ?? ""
             repoPath = FileManager.default.fileExists(atPath: bundled + "/companion/install-macos.sh")
@@ -308,7 +316,7 @@ final class AppModel {
         guard keychainValue(account: "app_id") == appID else { status = "App ID 已修改，请先重新授权 Lark"; notify(); return }
         guard FileManager.default.fileExists(atPath: repoPath + "/companion/install-macos.sh") else { status = "项目目录无效，找不到 companion/install-macos.sh"; notify(); return }
         save(); isBusy = true; status = "正在启动本机服务并连接时钟…"; appendLog("准备启动：专注 \(focus) 分钟，休息 \(rest) 分钟，设备 \(deviceIP)"); notify()
-        let focusSeconds = focus * 60; let restSeconds = rest * 60; let repo = repoPath; let device = deviceIP.contains(":") ? deviceIP : deviceIP + ":5555"; let host = hostIP
+        let focusSeconds = focus * 60; let restSeconds = rest * 60; let repo = repoPath; let device = deviceIP.contains(":") ? deviceIP : deviceIP + ":5555"; let host = hostIP; let audio = hasCustomAudio ? customAudioURL.path : nil
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 self.updateOnMain { self.status = "1/4 检查运行环境…"; self.notify() }
@@ -322,7 +330,9 @@ final class AppModel {
                 self.updateOnMain { self.appendLog(install); self.areServicesInstalled = true; self.areServicesRunning = true; self.status = "4/4 配置并启动 TC002…"; self.notify() }
                 let configure = try Self.run("/bin/bash", args: [repo + "/companion/configure-device.sh", "--adb-target", device, "--lan-host", host, "--focus-seconds", String(focusSeconds), "--rest-seconds", String(restSeconds)], cwd: repo)
                 self.updateOnMain { self.appendLog(configure); self.isDeviceReachable = true; self.notify() }
-                let launch = try Self.run("/bin/bash", args: [repo + "/companion/start-focus.sh", "--adb-target", device], cwd: repo)
+                var launchArgs = [repo + "/companion/start-focus.sh", "--adb-target", device]
+                if let audio { launchArgs += ["--audio", audio] }
+                let launch = try Self.run("/bin/bash", args: launchArgs, cwd: repo)
                 self.updateOnMain { self.appendLog(launch); self.isBusy = false; self.status = "专注时钟已启动；设备重启后恢复原生界面"; self.notify() }
             } catch {
                 self.updateOnMain {
@@ -355,9 +365,48 @@ final class AppModel {
     }
 
     func save() {
-        let config = StoredConfig(deviceIP: deviceIP, hostIP: hostIP, focusMinutes: focusMinutes, restMinutes: restMinutes, repoPath: repoPath)
+        let config = StoredConfig(deviceIP: deviceIP, hostIP: hostIP, focusMinutes: focusMinutes, restMinutes: restMinutes, repoPath: repoPath, customAudioName: hasCustomAudio ? customAudioName : nil)
         do { let directory = supportDirectory(); try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true); try JSONEncoder().encode(config).write(to: directory.appendingPathComponent("config.json"), options: .atomic) }
         catch { appendLog("保存配置失败：\(error.localizedDescription)") }
+    }
+
+    func chooseCustomAudio(_ source: URL) {
+        guard !isBusy else { return }
+        guard source.pathExtension.lowercased() == "mp3" else { status = "请选择 MP3 文件"; notify(); return }
+        guard let values = try? source.resourceValues(forKeys: [.fileSizeKey]), let size = values.fileSize, size > 0, size <= 20 * 1024 * 1024 else {
+            status = "MP3 文件必须大于 0 且不超过 20 MB"; notify(); return
+        }
+        do {
+            let directory = supportDirectory()
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let temporary = directory.appendingPathComponent("focus_done.mp3.\(UUID().uuidString).tmp")
+            try FileManager.default.copyItem(at: source, to: temporary)
+            if FileManager.default.fileExists(atPath: customAudioURL.path) { try FileManager.default.removeItem(at: customAudioURL) }
+            try FileManager.default.moveItem(at: temporary, to: customAudioURL)
+            customAudioName = source.lastPathComponent
+            save()
+            status = "提示音已更换；下次启动时同步到 TC002"
+            appendLog("已选择自定义提示音：\(customAudioName)（不写入项目或固件）")
+            notify()
+        } catch {
+            status = "保存提示音失败：\(error.localizedDescription)"
+            notify()
+        }
+    }
+
+    func resetCustomAudio() {
+        guard !isBusy else { return }
+        do {
+            if FileManager.default.fileExists(atPath: customAudioURL.path) { try FileManager.default.removeItem(at: customAudioURL) }
+            customAudioName = ""
+            save()
+            status = "已恢复默认提示音；下次启动时同步到 TC002"
+            appendLog("已恢复默认提示音")
+            notify()
+        } catch {
+            status = "恢复默认提示音失败：\(error.localizedDescription)"
+            notify()
+        }
     }
 
     private func startOAuthProcess() {
@@ -498,6 +547,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let deviceField = NSTextField(); private let hostField = NSTextField(); private let focusField = NSTextField(); private let restField = NSTextField(); private let appIDField = NSTextField(); private let appSecretField = NSSecureTextField(); private let repoField = NSTextField(); private let statusField = NSTextField(labelWithString: ""); private let logView = NSTextView()
     private let startButton = NSButton(title: "启动专注时钟", target: nil, action: nil); private let stopButton = NSButton(title: "停止电脑助手", target: nil, action: nil); private let rebootButton = NSButton(title: "恢复原生界面（重启时钟）", target: nil, action: nil); private let authorizeButton = NSButton(title: "授权 Lark", target: nil, action: nil)
     private let environmentButton = NSButton(title: "检查运行环境", target: nil, action: nil); private let deviceButton = NSButton(title: "测试时钟连接", target: nil, action: nil); private let verifyLarkButton = NSButton(title: "验证 Lark 配置", target: nil, action: nil)
+    private let selectAudioButton = NSButton(title: "更换提示音", target: nil, action: nil); private let resetAudioButton = NSButton(title: "恢复默认", target: nil, action: nil); private let audioStatusLabel = NSTextField(labelWithString: "当前使用默认提示音")
     private let advancedButton = NSButton(title: "显示高级设置", target: nil, action: nil)
     private let busyIndicator = NSProgressIndicator()
     private let operationIcon = NSImageView()
@@ -577,7 +627,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         styleButton(verifyLarkButton, symbol: "checkmark.seal.fill")
         stack.addArrangedSubview(section("授权 Lark", step: "03", symbol: "person.crop.circle.badge.checkmark", accent: .systemIndigo, height: 184, rows: [row("App ID", appIDField, "Lark 自建应用 App ID"), row("App Secret", appSecretField, "只写入 macOS 钥匙串"), buttonGroup([authorizeButton, verifyLarkButton])]))
 
-        stack.addArrangedSubview(section("专注节奏", step: "04", symbol: "timer", accent: .systemGreen, height: 146, rows: [row("专注（分钟）", focusField, "45"), row("休息（分钟）", restField, "5")]))
+        selectAudioButton.target = self; selectAudioButton.action = #selector(selectAudio)
+        styleButton(selectAudioButton, symbol: "music.note")
+        resetAudioButton.target = self; resetAudioButton.action = #selector(resetAudio)
+        resetAudioButton.bezelStyle = .rounded; resetAudioButton.controlSize = .large; resetAudioButton.font = .systemFont(ofSize: 13, weight: .medium); resetAudioButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 34).isActive = true
+        audioStatusLabel.font = .systemFont(ofSize: 12); audioStatusLabel.textColor = .secondaryLabelColor; audioStatusLabel.lineBreakMode = .byTruncatingTail; audioStatusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal); audioStatusLabel.widthAnchor.constraint(equalToConstant: 245).isActive = true
+        let audioControls = NSStackView(views: [selectAudioButton, resetAudioButton, audioStatusLabel]); audioControls.orientation = .horizontal; audioControls.alignment = .centerY; audioControls.spacing = 10
+        let audioRow = NSStackView(views: [label("提示音"), audioControls]); audioRow.orientation = .horizontal; audioRow.alignment = .centerY; audioRow.spacing = 10
+        stack.addArrangedSubview(section("专注节奏", step: "04", symbol: "timer", accent: .systemGreen, height: 196, rows: [row("专注（分钟）", focusField, "45"), row("休息（分钟）", restField, "5"), audioRow]))
         advancedButton.target = self
         advancedButton.action = #selector(toggleAdvanced)
         advancedButton.bezelStyle = .inline
@@ -950,10 +1007,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.operationIcon.contentTintColor = self.model.isBusy ? .systemBlue : (self.model.status.contains("失败") || self.model.status.contains("未通过") || self.model.status.contains("未完成") ? .systemOrange : .systemGreen)
             if self.model.isBusy { self.busyIndicator.startAnimation(nil) } else { self.busyIndicator.stopAnimation(nil) }
             self.authorizeButton.title = self.model.isOAuthRunning ? "重新开始授权" : (self.model.isAuthorized ? "重新授权 Lark" : "授权 Lark")
+            self.audioStatusLabel.stringValue = self.model.customAudioStatus
             self.authorizeButton.isEnabled = !self.model.isBusy || self.model.isOAuthRunning
             self.environmentButton.isEnabled = !self.model.isBusy
             self.deviceButton.isEnabled = !self.model.isBusy
             self.verifyLarkButton.isEnabled = !self.model.isBusy && self.model.isAuthorized
+            self.selectAudioButton.isEnabled = !self.model.isBusy
+            self.resetAudioButton.isEnabled = !self.model.isBusy && self.model.hasCustomAudio
             self.startButton.isEnabled = !self.model.isBusy && self.model.isAuthorized
             self.stopButton.isEnabled = !self.model.isBusy && self.model.areServicesRunning
             self.rebootButton.isEnabled = !self.model.isBusy
@@ -965,6 +1025,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func checkDevice() { collectFields(); model.checkDevice() }
     @objc private func verifyLark() { collectFields(); model.verifyLark() }
     @objc private func authorize() { collectFields(); model.authorizeLark() }
+    @objc private func selectAudio() {
+        guard !model.isBusy else { return }
+        let panel = NSOpenPanel()
+        panel.title = "选择提示音"
+        panel.prompt = "使用此 MP3"
+        panel.allowedContentTypes = [.mp3]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK, let url = panel.url { model.chooseCustomAudio(url) }
+    }
+    @objc private func resetAudio() { model.resetCustomAudio() }
     @objc private func toggleAdvanced() {
         guard let advancedSection else { return }
         advancedSection.isHidden.toggle()

@@ -10,6 +10,10 @@
 “恢复原生界面”按钮只重启 TC002；临时程序在 `/tmp`，所以设备重启后会恢复原生
 页面，不会修改固件。Lark 密钥和 token 仍然只进 macOS 钥匙串。
 
+GUI 的“更换提示音”会在下一次启动时把用户选择的 MP3 临时推送为
+`/tmp/ui/audio/focus_done.mp3`。命令行也可以显式传入：
+`bash companion/start-focus.sh --adb-target 192.0.2.131:5555 --audio /path/to/music.mp3`。
+
 GUI 将项目目录作为“高级设置（通常无需修改）”保留。`build-app.sh` 会先校验
 `device/TC002_Focus_Probe/TemporaryFocusRelease` 的 SHA-256 manifest，再把项目脚本
 和设备运行包放进 App Resources。正式对外分发前仍需给 App 签名和公证。
