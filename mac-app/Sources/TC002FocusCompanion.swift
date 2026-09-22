@@ -543,16 +543,20 @@ final class AppModel {
 
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let windowWidth: CGFloat = 860
+    private let contentWidth: CGFloat = 804
     private let model = AppModel(); private var window: NSWindow!
     private let deviceField = NSTextField(); private let hostField = NSTextField(); private let focusField = NSTextField(); private let restField = NSTextField(); private let appIDField = NSTextField(); private let appSecretField = NSSecureTextField(); private let repoField = NSTextField(); private let statusField = NSTextField(labelWithString: ""); private let logView = NSTextView()
     private let startButton = NSButton(title: "启动专注时钟", target: nil, action: nil); private let stopButton = NSButton(title: "停止电脑助手", target: nil, action: nil); private let rebootButton = NSButton(title: "恢复原生界面（重启时钟）", target: nil, action: nil); private let authorizeButton = NSButton(title: "授权 Lark", target: nil, action: nil)
     private let environmentButton = NSButton(title: "检查运行环境", target: nil, action: nil); private let deviceButton = NSButton(title: "测试时钟连接", target: nil, action: nil); private let verifyLarkButton = NSButton(title: "验证 Lark 配置", target: nil, action: nil)
     private let selectAudioButton = NSButton(title: "更换提示音", target: nil, action: nil); private let resetAudioButton = NSButton(title: "恢复默认", target: nil, action: nil); private let audioStatusLabel = NSTextField(labelWithString: "当前使用默认提示音")
     private let advancedButton = NSButton(title: "显示高级设置", target: nil, action: nil)
-    private let appearancePicker = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let appearancePicker = NSSegmentedControl(labels: ["自动", "浅色", "深色"], trackingMode: .selectOne, target: nil, action: nil)
     private let busyIndicator = NSProgressIndicator()
     private let operationIcon = NSImageView()
-    private weak var displayStackView: NSStackView?
+    private weak var displayStackView: NSView?
+    private weak var navigationBarView: NSVisualEffectView?
+    private weak var statusPanelView: NSVisualEffectView?
     private var appearanceObserver: NSKeyValueObservation?
     private var advancedSection: NSBox?
     private var materialCards: [NSBox] = []
@@ -561,7 +565,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var readinessCards: [NSBox] = []
 
     static func main() { let app = NSApplication.shared; let delegate = AppDelegate(); app.delegate = delegate; app.setActivationPolicy(.regular); withExtendedLifetime(delegate) { app.run() } }
-    func applicationDidFinishLaunching(_ notification: Notification) { restoreAppearance(); model.onChange = { [weak self] in self?.refresh() }; model.onEnvironmentInstallOffer = { [weak self] packages, message in self?.offerEnvironmentInstall(packages: packages, reason: message) }; buildWindow(); model.load(); populateFieldsFromModel(); refresh(); model.autoValidateSavedConfiguration(); appearanceObserver = NSApp.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in self?.refreshDynamicAppearance() } }
+    func applicationDidFinishLaunching(_ notification: Notification) { restoreAppearance(); model.onChange = { [weak self] in self?.refresh() }; model.onEnvironmentInstallOffer = { [weak self] packages, message in self?.offerEnvironmentInstall(packages: packages, reason: message) }; buildWindow(); model.load(); populateFieldsFromModel(); refresh(); model.autoValidateSavedConfiguration(); appearanceObserver = NSApp.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in self?.refresh() } }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationWillTerminate(_ notification: Notification) { collectFields(); model.save() }
 
@@ -571,7 +575,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         backdrop.blendingMode = .behindWindow
         backdrop.state = .active
 
-        let content = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 1580))
+        let navigation = hero()
+        navigation.translatesAutoresizingMaskIntoConstraints = false
+        backdrop.addSubview(navigation)
+
+        let statusPanel = statusOverview()
+        statusPanel.translatesAutoresizingMaskIntoConstraints = false
+        backdrop.addSubview(statusPanel)
+
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: windowWidth, height: 990))
         let scroll = NSScrollView()
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
@@ -580,65 +592,72 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         scroll.translatesAutoresizingMaskIntoConstraints = false
         backdrop.addSubview(scroll)
         NSLayoutConstraint.activate([
+            navigation.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor, constant: 18),
+            navigation.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor, constant: -18),
+            navigation.topAnchor.constraint(equalTo: backdrop.topAnchor, constant: 10),
+            navigation.heightAnchor.constraint(equalToConstant: 64),
+            statusPanel.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor, constant: 28),
+            statusPanel.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor, constant: -28),
+            statusPanel.topAnchor.constraint(equalTo: navigation.bottomAnchor, constant: 8),
+            statusPanel.heightAnchor.constraint(equalToConstant: 104),
             scroll.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: backdrop.topAnchor),
+            scroll.topAnchor.constraint(equalTo: statusPanel.bottomAnchor, constant: 8),
             scroll.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor)
         ])
 
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 14
+        stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 32),
-            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -32),
-            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 28),
-            stack.widthAnchor.constraint(equalToConstant: 736)
+            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 28),
+            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -28),
+            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 16),
+            stack.widthAnchor.constraint(equalToConstant: contentWidth)
         ])
-
-        stack.addArrangedSubview(hero())
-        let statusHeading = NSTextField(labelWithString: "系统状态")
-        statusHeading.font = .systemFont(ofSize: 14, weight: .semibold)
-        statusHeading.textColor = .secondaryLabelColor
-        stack.addArrangedSubview(statusHeading)
-        let readinessRow = NSStackView(views: [
-            readinessChip("运行环境", symbol: "shippingbox.fill"),
-            readinessChip("Lark", symbol: "checkmark.seal.fill"),
-            readinessChip("TC002", symbol: "display.2"),
-            readinessChip("电脑助手", symbol: "bolt.horizontal.circle.fill")
-        ])
-        readinessRow.orientation = .horizontal
-        readinessRow.spacing = 10
-        readinessRow.distribution = .fillEqually
-        readinessRow.widthAnchor.constraint(equalToConstant: 736).isActive = true
-        readinessRow.heightAnchor.constraint(equalToConstant: 62).isActive = true
-        stack.addArrangedSubview(readinessRow)
 
         authorizeButton.target = self; authorizeButton.action = #selector(authorize)
         styleButton(authorizeButton, symbol: "person.badge.key.fill")
         environmentButton.target = self; environmentButton.action = #selector(checkEnvironment)
         styleButton(environmentButton, symbol: "checkmark.shield.fill")
-        stack.addArrangedSubview(section("准备电脑", step: "01", symbol: "desktopcomputer", accent: .systemBlue, height: 136, rows: [hint("检查 Node.js、ADB、EMQX 和已校验的 TC002 运行包。"), buttonRow(environmentButton)]))
+        environmentButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 138).isActive = true
+        let environmentHint = NSTextField(labelWithString: "检查 Node.js、ADB、EMQX 和已校验的 TC002 运行包。")
+        environmentHint.font = .systemFont(ofSize: 12)
+        environmentHint.textColor = .secondaryLabelColor
+        let environmentRow = NSStackView(views: [environmentHint, NSView(), environmentButton])
+        environmentRow.orientation = .horizontal; environmentRow.alignment = .centerY; environmentRow.spacing = 10
+        stack.addArrangedSubview(section("准备电脑", step: "01", symbol: "desktopcomputer", accent: .systemBlue, height: 96, rows: [environmentRow]))
 
         deviceButton.target = self; deviceButton.action = #selector(checkDevice)
+        deviceButton.title = "测试连接"
         styleButton(deviceButton, symbol: "antenna.radiowaves.left.and.right")
-        stack.addArrangedSubview(section("连接 TC002", step: "02", symbol: "display.2", accent: .systemTeal, height: 176, rows: [row("时钟 IP", deviceField, "例如 192.168.1.131"), rowWithButton("电脑 IP", hostField, "局域网 IPv4", "自动识别", #selector(detectHost)), buttonRow(deviceButton)]))
+        stack.addArrangedSubview(section("连接 TC002", step: "02", symbol: "display.2", accent: .systemTeal, height: 132, rows: [rowWithButton("时钟 IP", deviceField, "例如 192.168.1.131", deviceButton), rowWithButton("电脑 IP", hostField, "局域网 IPv4", "自动识别", #selector(detectHost))]))
 
         verifyLarkButton.target = self; verifyLarkButton.action = #selector(verifyLark)
         styleButton(verifyLarkButton, symbol: "checkmark.seal.fill")
-        stack.addArrangedSubview(section("授权 Lark", step: "03", symbol: "person.crop.circle.badge.checkmark", accent: .systemIndigo, height: 184, rows: [row("App ID", appIDField, "Lark 自建应用 App ID"), row("App Secret", appSecretField, "只写入 macOS 钥匙串"), buttonGroup([authorizeButton, verifyLarkButton])]))
+        authorizeButton.widthAnchor.constraint(equalToConstant: 132).isActive = true
+        verifyLarkButton.widthAnchor.constraint(equalToConstant: 132).isActive = true
+        configureField(appSecretField, placeholder: "只写入 macOS 钥匙串", width: 344)
+        let larkControls = NSStackView(views: [appSecretField, authorizeButton, verifyLarkButton])
+        larkControls.orientation = .horizontal; larkControls.alignment = .centerY; larkControls.spacing = 8
+        stack.addArrangedSubview(section("授权 Lark", step: "03", symbol: "person.crop.circle.badge.checkmark", accent: .systemIndigo, height: 132, rows: [row("App ID", appIDField, "Lark 自建应用 App ID"), rowLabel("App Secret", larkControls)]))
 
         selectAudioButton.target = self; selectAudioButton.action = #selector(selectAudio)
         styleButton(selectAudioButton, symbol: "music.note")
         resetAudioButton.target = self; resetAudioButton.action = #selector(resetAudio)
-        resetAudioButton.bezelStyle = .rounded; resetAudioButton.controlSize = .large; resetAudioButton.font = .systemFont(ofSize: 13, weight: .medium); resetAudioButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 34).isActive = true
+        resetAudioButton.bezelStyle = .rounded; resetAudioButton.controlSize = .regular; resetAudioButton.font = .systemFont(ofSize: 12, weight: .medium); resetAudioButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 30).isActive = true
         audioStatusLabel.font = .systemFont(ofSize: 12); audioStatusLabel.textColor = .secondaryLabelColor; audioStatusLabel.lineBreakMode = .byTruncatingTail; audioStatusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal); audioStatusLabel.widthAnchor.constraint(equalToConstant: 245).isActive = true
         let audioControls = NSStackView(views: [selectAudioButton, resetAudioButton, audioStatusLabel]); audioControls.orientation = .horizontal; audioControls.alignment = .centerY; audioControls.spacing = 10
         let audioRow = NSStackView(views: [label("提示音"), audioControls]); audioRow.orientation = .horizontal; audioRow.alignment = .centerY; audioRow.spacing = 10
-        stack.addArrangedSubview(section("专注节奏", step: "04", symbol: "timer", accent: .systemGreen, height: 196, rows: [row("专注（分钟）", focusField, "45"), row("休息（分钟）", restField, "5"), audioRow]))
+        configureField(focusField, placeholder: "45", width: 200)
+        configureField(restField, placeholder: "5", width: 200)
+        let durationSpacer = NSView(); durationSpacer.widthAnchor.constraint(equalToConstant: 18).isActive = true
+        let durationRow = NSStackView(views: [label("专注（分钟）"), focusField, durationSpacer, label("休息（分钟）"), restField])
+        durationRow.orientation = .horizontal; durationRow.alignment = .centerY; durationRow.spacing = 10
+        stack.addArrangedSubview(section("专注节奏", step: "04", symbol: "timer", accent: .systemPurple, height: 132, rows: [durationRow, audioRow]))
         advancedButton.target = self
         advancedButton.action = #selector(toggleAdvanced)
         advancedButton.bezelStyle = .inline
@@ -649,7 +668,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         advancedButton.contentTintColor = .secondaryLabelColor
         advancedButton.toolTip = "仅在使用自定义源码目录时需要修改"
         stack.addArrangedSubview(advancedButton)
-        let advanced = section("高级设置", step: "", symbol: "gearshape.fill", accent: .secondaryLabelColor, height: 108, rows: [row("项目目录", repoField, "通常无需修改")])
+        let advanced = section("高级设置", step: "", symbol: "gearshape.fill", accent: .secondaryLabelColor, height: 92, rows: [row("项目目录", repoField, "通常无需修改")])
         advanced.isHidden = true
         advancedSection = advanced
         stack.addArrangedSubview(advanced)
@@ -668,17 +687,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         actions.orientation = .horizontal
         actions.spacing = 12
         actions.distribution = .fillEqually
-        actions.widthAnchor.constraint(equalToConstant: 736).isActive = true
-        actions.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        actions.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
+        actions.heightAnchor.constraint(equalToConstant: 40).isActive = true
         stack.addArrangedSubview(actions)
 
         stack.addArrangedSubview(operationCard())
         stack.addArrangedSubview(logCard())
 
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 840), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "TC002 Focus Clock"
-        window.titlebarAppearsTransparent = false
-        window.minSize = NSSize(width: 800, height: 680)
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: windowWidth, height: 700), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.title = "专注助手"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.minSize = NSSize(width: windowWidth, height: 640)
         window.contentView = backdrop
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -686,79 +706,163 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func hero() -> NSView {
-        let box = card()
-        box.widthAnchor.constraint(equalToConstant: 736).isActive = true
-        box.heightAnchor.constraint(equalToConstant: 158).isActive = true
+        let glass = NSVisualEffectView()
+        glass.material = .headerView
+        glass.blendingMode = .withinWindow
+        glass.state = .active
+        glass.wantsLayer = true
+        glass.layer?.cornerRadius = 18
+        glass.layer?.borderWidth = 1
+        glass.layer?.borderColor = materialBorderColor().cgColor
+        glass.layer?.shadowColor = NSColor.black.cgColor
+        glass.layer?.shadowOpacity = isDarkAppearance() ? 0.24 : 0.08
+        glass.layer?.shadowRadius = 14
+        glass.layer?.shadowOffset = NSSize(width: 0, height: -2)
+        navigationBarView = glass
 
-        let icon = NSImageView(image: symbol("timer", size: 36, weight: .semibold))
-        icon.contentTintColor = .systemGreen
-        icon.widthAnchor.constraint(equalToConstant: 48).isActive = true
-        icon.heightAnchor.constraint(equalToConstant: 48).isActive = true
+        let icon = NSImageView(image: symbol("timer", size: 25, weight: .semibold))
+        icon.contentTintColor = .systemBlue
+        icon.widthAnchor.constraint(equalToConstant: 34).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: 34).isActive = true
 
         let title = NSTextField(labelWithString: "TC002 Focus Clock")
-        title.font = .systemFont(ofSize: 28, weight: .bold)
-        title.heightAnchor.constraint(greaterThanOrEqualToConstant: 36).isActive = true
-        let subtitle = NSTextField(labelWithString: "专注更清晰，状态自然同步")
-        subtitle.font = .systemFont(ofSize: 14, weight: .medium)
+        title.font = .systemFont(ofSize: 19, weight: .semibold)
+        title.usesSingleLineMode = true
+        let subtitle = NSTextField(labelWithString: "专注助手 · 状态自然同步")
+        subtitle.font = .systemFont(ofSize: 11, weight: .medium)
         subtitle.textColor = .secondaryLabelColor
-        subtitle.heightAnchor.constraint(greaterThanOrEqualToConstant: 20).isActive = true
-        let badge = NSTextField(labelWithString: "  临时部署 · 不刷固件  ")
-        badge.font = .systemFont(ofSize: 11, weight: .semibold)
-        badge.textColor = .systemGreen
+        subtitle.usesSingleLineMode = true
+        let identity = NSStackView(views: [title, subtitle])
+        identity.orientation = .vertical
+        identity.alignment = .leading
+        identity.spacing = 1
+
+        let badge = NSView()
         badge.wantsLayer = true
-        badge.layer?.cornerRadius = 8
-        badge.layer?.backgroundColor = NSColor.systemGreen.withAlphaComponent(0.10).cgColor
-        badge.heightAnchor.constraint(equalToConstant: 22).isActive = true
-        appearancePicker.removeAllItems()
-        appearancePicker.addItems(withTitles: ["跟随系统", "浅色", "深色"])
-        appearancePicker.selectItem(at: appearanceIndex())
+        badge.layer?.cornerRadius = 11
+        badge.layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.10).cgColor
+        badge.widthAnchor.constraint(equalToConstant: 124).isActive = true
+        badge.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        let badgeLabel = NSTextField(labelWithString: "临时部署 · 不刷固件")
+        badgeLabel.font = .systemFont(ofSize: 10, weight: .semibold)
+        badgeLabel.textColor = .systemBlue
+        badgeLabel.alignment = .center
+        badgeLabel.translatesAutoresizingMaskIntoConstraints = false
+        badge.addSubview(badgeLabel)
+        NSLayoutConstraint.activate([
+            badgeLabel.centerXAnchor.constraint(equalTo: badge.centerXAnchor),
+            badgeLabel.centerYAnchor.constraint(equalTo: badge.centerYAnchor)
+        ])
+
+        appearancePicker.selectedSegment = appearanceIndex()
         appearancePicker.target = self
         appearancePicker.action = #selector(appearanceChanged)
-        appearancePicker.bezelStyle = .rounded
+        appearancePicker.segmentStyle = .rounded
         appearancePicker.controlSize = .small
         appearancePicker.font = .systemFont(ofSize: 11, weight: .medium)
-        appearancePicker.widthAnchor.constraint(equalToConstant: 118).isActive = true
-        appearancePicker.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        appearancePicker.setWidth(52, forSegment: 0)
+        appearancePicker.setWidth(52, forSegment: 1)
+        appearancePicker.setWidth(52, forSegment: 2)
+        appearancePicker.widthAnchor.constraint(equalToConstant: 156).isActive = true
+        appearancePicker.heightAnchor.constraint(equalToConstant: 28).isActive = true
         appearancePicker.toolTip = "默认跟随 macOS 外观，也可以在这里临时切换"
-        let copy = NSStackView(views: [title, subtitle, badge, appearancePicker])
-        copy.orientation = .vertical
-        copy.alignment = .leading
-        copy.spacing = 5
 
         let digits = NSTextField(labelWithString: "45:00")
-        digits.font = .monospacedDigitSystemFont(ofSize: 27, weight: .bold)
-        digits.textColor = NSColor(calibratedRed: 0.18, green: 0.90, blue: 0.46, alpha: 1)
+        digits.font = .monospacedDigitSystemFont(ofSize: 22, weight: .semibold)
+        digits.textColor = .systemBlue
         digits.alignment = .center
         let mode = NSTextField(labelWithString: "FOCUS  ●")
-        mode.font = .monospacedSystemFont(ofSize: 9, weight: .semibold)
-        mode.textColor = NSColor(calibratedRed: 0.18, green: 0.90, blue: 0.46, alpha: 0.85)
+        mode.font = .monospacedSystemFont(ofSize: 8, weight: .semibold)
+        mode.textColor = NSColor.systemBlue.withAlphaComponent(0.78)
         mode.alignment = .center
-        let displayStack = NSStackView(views: [digits, mode])
-        displayStack.orientation = .vertical
-        displayStack.alignment = .centerX
-        displayStack.spacing = 0
-        displayStack.wantsLayer = true
-        displayStack.layer?.backgroundColor = NSColor.textBackgroundColor.withAlphaComponent(0.82).cgColor
-        displayStack.layer?.cornerRadius = 12
-        displayStack.layer?.borderWidth = 1
-        displayStack.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.35).cgColor
-        displayStack.widthAnchor.constraint(equalToConstant: 170).isActive = true
-        displayStack.heightAnchor.constraint(equalToConstant: 66).isActive = true
-        displayStackView = displayStack
+        let displayContent = NSStackView(views: [digits, mode])
+        displayContent.orientation = .vertical
+        displayContent.alignment = .centerX
+        displayContent.spacing = 0
+        displayContent.translatesAutoresizingMaskIntoConstraints = false
+        let display = NSView()
+        display.wantsLayer = true
+        display.layer?.backgroundColor = displayFillColor().cgColor
+        display.layer?.cornerRadius = 12
+        display.layer?.borderWidth = 1
+        display.layer?.borderColor = materialBorderColor().cgColor
+        display.widthAnchor.constraint(equalToConstant: 124).isActive = true
+        display.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        display.addSubview(displayContent)
+        NSLayoutConstraint.activate([
+            displayContent.centerXAnchor.constraint(equalTo: display.centerXAnchor),
+            displayContent.centerYAnchor.constraint(equalTo: display.centerYAnchor)
+        ])
+        displayStackView = display
 
-        let row = NSStackView(views: [icon, copy, NSView(), displayStack])
+        let row = NSStackView(views: [icon, identity, badge, NSView(), display, appearancePicker])
         row.orientation = .horizontal
         row.alignment = .centerY
-        row.spacing = 16
+        row.spacing = 12
         row.translatesAutoresizingMaskIntoConstraints = false
-        box.contentView?.addSubview(row)
+        glass.addSubview(row)
         NSLayoutConstraint.activate([
-            row.leadingAnchor.constraint(equalTo: box.contentView!.leadingAnchor, constant: 20),
-            row.trailingAnchor.constraint(equalTo: box.contentView!.trailingAnchor, constant: -20),
-            row.topAnchor.constraint(equalTo: box.contentView!.topAnchor, constant: 16),
-            row.bottomAnchor.constraint(equalTo: box.contentView!.bottomAnchor, constant: -16)
+            row.leadingAnchor.constraint(equalTo: glass.leadingAnchor, constant: 16),
+            row.trailingAnchor.constraint(equalTo: glass.trailingAnchor, constant: -16),
+            row.centerYAnchor.constraint(equalTo: glass.centerYAnchor),
+            row.heightAnchor.constraint(equalToConstant: 44)
         ])
-        return box
+        return glass
+    }
+
+    private func statusOverview() -> NSView {
+        let panel = NSVisualEffectView()
+        panel.material = .headerView
+        panel.blendingMode = .withinWindow
+        panel.state = .active
+        panel.wantsLayer = true
+        panel.layer?.cornerRadius = 14
+        panel.layer?.borderWidth = 1
+        panel.layer?.borderColor = materialBorderColor().cgColor
+        statusPanelView = panel
+
+        let heading = NSTextField(labelWithString: "系统状态")
+        heading.font = .systemFont(ofSize: 12, weight: .semibold)
+        let hint = NSTextField(labelWithString: "始终可见 · 全部通过后即可启动")
+        hint.font = .systemFont(ofSize: 10, weight: .regular)
+        hint.textColor = .secondaryLabelColor
+        let header = NSStackView(views: [heading, NSView(), hint])
+        header.orientation = .horizontal
+        header.alignment = .centerY
+        header.heightAnchor.constraint(equalToConstant: 18).isActive = true
+
+        let items = [
+            readinessChip("运行环境", symbol: "shippingbox.fill"),
+            readinessChip("Lark", symbol: "checkmark.seal.fill"),
+            readinessChip("TC002", symbol: "display.2"),
+            readinessChip("电脑助手", symbol: "bolt.horizontal.circle.fill")
+        ]
+        items.forEach {
+            $0.widthAnchor.constraint(equalToConstant: (contentWidth - 34) / 2).isActive = true
+            $0.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        }
+        let grid = NSGridView(views: [[items[0], items[1]], [items[2], items[3]]])
+        grid.columnSpacing = 8
+        grid.rowSpacing = 6
+        grid.xPlacement = .fill
+        grid.yPlacement = .fill
+        grid.heightAnchor.constraint(equalToConstant: 66).isActive = true
+
+        let stack = NSStackView(views: [header, grid])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 4
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        panel.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: panel.leadingAnchor, constant: 12),
+            stack.trailingAnchor.constraint(equalTo: panel.trailingAnchor, constant: -12),
+            stack.topAnchor.constraint(equalTo: panel.topAnchor, constant: 8),
+            stack.bottomAnchor.constraint(equalTo: panel.bottomAnchor, constant: -8),
+            header.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            grid.widthAnchor.constraint(equalTo: stack.widthAnchor)
+        ])
+        return panel
     }
 
     private func section(_ title: String, step: String, symbol symbolName: String, accent: NSColor, height: CGFloat, rows: [NSView]) -> NSBox {
@@ -788,22 +892,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let rowsStack = NSStackView(views: rows)
         rowsStack.orientation = .vertical
         rowsStack.alignment = .leading
-        rowsStack.spacing = 10
+        rowsStack.spacing = 8
         let inner = NSStackView(views: [header, rowsStack])
         inner.orientation = .vertical
         inner.alignment = .leading
-        inner.spacing = 12
+        inner.spacing = 10
         inner.translatesAutoresizingMaskIntoConstraints = false
         box.contentView?.addSubview(inner)
         NSLayoutConstraint.activate([
             inner.leadingAnchor.constraint(equalTo: box.contentView!.leadingAnchor, constant: 18),
             inner.trailingAnchor.constraint(equalTo: box.contentView!.trailingAnchor, constant: -18),
-            inner.topAnchor.constraint(equalTo: box.contentView!.topAnchor, constant: 14),
-            inner.bottomAnchor.constraint(lessThanOrEqualTo: box.contentView!.bottomAnchor, constant: -14),
+            inner.topAnchor.constraint(equalTo: box.contentView!.topAnchor, constant: 12),
+            inner.bottomAnchor.constraint(lessThanOrEqualTo: box.contentView!.bottomAnchor, constant: -12),
             header.widthAnchor.constraint(equalTo: inner.widthAnchor),
             rowsStack.widthAnchor.constraint(equalTo: inner.widthAnchor)
         ])
-        box.widthAnchor.constraint(equalToConstant: 736).isActive = true
+        box.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
         box.heightAnchor.constraint(equalToConstant: height).isActive = true
         return box
     }
@@ -812,7 +916,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let box = NSBox()
         box.boxType = .custom
         box.titlePosition = .noTitle
-        box.cornerRadius = 18
+        box.cornerRadius = 14
         box.borderWidth = 1
         box.borderColor = materialBorderColor()
         box.fillColor = materialFillColor()
@@ -847,8 +951,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func operationCard() -> NSBox {
         let box = card()
-        box.widthAnchor.constraint(equalToConstant: 736).isActive = true
-        box.heightAnchor.constraint(equalToConstant: 84).isActive = true
+        box.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
+        box.heightAnchor.constraint(equalToConstant: 64).isActive = true
         operationIcon.image = symbol("info.circle.fill", size: 20, weight: .semibold)
         operationIcon.contentTintColor = .systemBlue
         operationIcon.widthAnchor.constraint(equalToConstant: 28).isActive = true
@@ -874,14 +978,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func logCard() -> NSBox {
         let box = card()
-        box.widthAnchor.constraint(equalToConstant: 736).isActive = true
-        box.heightAnchor.constraint(equalToConstant: 246).isActive = true
+        box.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
+        box.heightAnchor.constraint(equalToConstant: 200).isActive = true
         let title = NSTextField(labelWithString: "运行日志")
         title.font = .systemFont(ofSize: 14, weight: .semibold)
         title.usesSingleLineMode = true
+        title.alignment = .left
         title.setContentHuggingPriority(.required, for: .horizontal)
         title.setContentCompressionResistancePriority(.required, for: .horizontal)
-        title.heightAnchor.constraint(greaterThanOrEqualToConstant: 22).isActive = true
         let detail = NSTextField(labelWithString: "  不记录凭据  ")
         detail.font = .systemFont(ofSize: 10, weight: .medium)
         detail.textColor = .secondaryLabelColor
@@ -899,15 +1003,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         header.orientation = .horizontal
         header.alignment = .centerY
         header.spacing = 10
-        header.heightAnchor.constraint(greaterThanOrEqualToConstant: 24).isActive = true
+        header.heightAnchor.constraint(equalToConstant: 28).isActive = true
         logView.isEditable = false
         logView.isRichText = false
         logView.isSelectable = true
         logView.isVerticallyResizable = true
         logView.isHorizontallyResizable = false
         logView.autoresizingMask = [.width]
-        logView.frame = NSRect(x: 0, y: 0, width: 704, height: 184)
-        logView.minSize = NSSize(width: 0, height: 184)
+        logView.frame = NSRect(x: 0, y: 0, width: contentWidth - 32, height: 140)
+        logView.minSize = NSSize(width: 0, height: 140)
         logView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         logView.font = .systemFont(ofSize: 13, weight: .regular)
         logView.textColor = .labelColor
@@ -919,7 +1023,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         paragraphStyle.paragraphSpacing = 2
         logView.defaultParagraphStyle = paragraphStyle
         logView.textContainer?.widthTracksTextView = true
-        logView.textContainer?.containerSize = NSSize(width: 704, height: CGFloat.greatestFiniteMagnitude)
+        logView.textContainer?.containerSize = NSSize(width: contentWidth - 32, height: CGFloat.greatestFiniteMagnitude)
         let logScroll = NSScrollView()
         logScroll.drawsBackground = false
         logScroll.borderType = .noBorder
@@ -932,32 +1036,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let inner = NSStackView(views: [header, logScroll])
         inner.orientation = .vertical
         inner.alignment = .leading
-        inner.spacing = 10
+        inner.spacing = 8
         inner.translatesAutoresizingMaskIntoConstraints = false
         box.contentView?.addSubview(inner)
         NSLayoutConstraint.activate([
             inner.leadingAnchor.constraint(equalTo: box.contentView!.leadingAnchor, constant: 16),
             inner.trailingAnchor.constraint(equalTo: box.contentView!.trailingAnchor, constant: -16),
-            inner.topAnchor.constraint(equalTo: box.contentView!.topAnchor, constant: 14),
-            inner.bottomAnchor.constraint(equalTo: box.contentView!.bottomAnchor, constant: -14),
+            inner.topAnchor.constraint(equalTo: box.contentView!.topAnchor, constant: 12),
+            inner.bottomAnchor.constraint(equalTo: box.contentView!.bottomAnchor, constant: -12),
             header.widthAnchor.constraint(equalTo: inner.widthAnchor),
             logScroll.widthAnchor.constraint(equalTo: inner.widthAnchor),
-            logScroll.heightAnchor.constraint(equalToConstant: 184)
+            logScroll.heightAnchor.constraint(equalToConstant: 140)
         ])
         return box
     }
 
     private func row(_ title: String, _ field: NSTextField, _ placeholder: String) -> NSView {
-        configureField(field, placeholder: placeholder, width: 520)
+        configureField(field, placeholder: placeholder, width: 632)
         return rowLabel(title, field)
     }
     private func rowWithButton(_ title: String, _ field: NSTextField, _ placeholder: String, _ buttonTitle: String, _ action: Selector) -> NSView {
         let row = NSStackView(); row.orientation = .horizontal; row.spacing = 10
-        configureField(field, placeholder: placeholder, width: 398)
+        configureField(field, placeholder: placeholder, width: 510)
         let button = NSButton(title: buttonTitle, target: self, action: action)
-        button.bezelStyle = .rounded; button.controlSize = .large
+        button.bezelStyle = .rounded; button.controlSize = .regular; button.font = .systemFont(ofSize: 12, weight: .medium)
         button.image = symbol("location.fill", size: 12, weight: .medium)
         button.imagePosition = .imageLeading
+        button.widthAnchor.constraint(equalToConstant: 112).isActive = true
+        button.heightAnchor.constraint(greaterThanOrEqualToConstant: 30).isActive = true
+        row.addArrangedSubview(label(title)); row.addArrangedSubview(field); row.addArrangedSubview(button)
+        return row
+    }
+    private func rowWithButton(_ title: String, _ field: NSTextField, _ placeholder: String, _ button: NSButton) -> NSView {
+        let row = NSStackView(); row.orientation = .horizontal; row.alignment = .centerY; row.spacing = 10
+        configureField(field, placeholder: placeholder, width: 510)
         button.widthAnchor.constraint(equalToConstant: 112).isActive = true
         row.addArrangedSubview(label(title)); row.addArrangedSubview(field); row.addArrangedSubview(button)
         return row
@@ -965,24 +1077,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func configureField(_ field: NSTextField, placeholder: String, width: CGFloat) {
         field.placeholderString = placeholder
         field.bezelStyle = .roundedBezel
-        field.controlSize = .large
-        field.font = .systemFont(ofSize: 13)
+        field.controlSize = .regular
+        field.font = .systemFont(ofSize: 12)
         field.widthAnchor.constraint(equalToConstant: width).isActive = true
-        field.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        field.heightAnchor.constraint(equalToConstant: 28).isActive = true
     }
     private func rowLabel(_ title: String, _ view: NSView) -> NSView { let row = NSStackView(views: [label(title), view]); row.orientation = .horizontal; row.alignment = .centerY; row.spacing = 10; return row }
-    private func label(_ text: String) -> NSTextField { let field = NSTextField(labelWithString: text); field.font = .systemFont(ofSize: 13, weight: .medium); field.textColor = .secondaryLabelColor; field.widthAnchor.constraint(equalToConstant: 142).isActive = true; field.heightAnchor.constraint(equalToConstant: 30).isActive = true; return field }
+    private func label(_ text: String) -> NSTextField { let field = NSTextField(labelWithString: text); field.font = .systemFont(ofSize: 12, weight: .medium); field.textColor = .secondaryLabelColor; field.widthAnchor.constraint(equalToConstant: 126).isActive = true; field.heightAnchor.constraint(equalToConstant: 28).isActive = true; return field }
     private func buttonRow(_ button: NSButton) -> NSView { button }
     private func buttonGroup(_ buttons: [NSButton]) -> NSView { let row = NSStackView(views: buttons); row.orientation = .horizontal; row.spacing = 10; return row }
-    private func hint(_ text: String) -> NSView { let value = NSTextField(labelWithString: text); value.textColor = .secondaryLabelColor; value.font = .systemFont(ofSize: 13); value.maximumNumberOfLines = 0; value.widthAnchor.constraint(equalToConstant: 680).isActive = true; return value }
+    private func hint(_ text: String) -> NSView { let value = NSTextField(labelWithString: text); value.textColor = .secondaryLabelColor; value.font = .systemFont(ofSize: 13); value.maximumNumberOfLines = 0; value.widthAnchor.constraint(equalToConstant: contentWidth - 56).isActive = true; return value }
     private func styleButton(_ button: NSButton, symbol symbolName: String, primary: Bool = false) {
         button.bezelStyle = .rounded
-        button.controlSize = .large
-        button.font = .systemFont(ofSize: 13, weight: primary ? .semibold : .medium)
-        button.image = symbol(symbolName, size: 13, weight: .semibold)
+        button.controlSize = .regular
+        button.font = .systemFont(ofSize: 12, weight: primary ? .semibold : .medium)
+        button.image = symbol(symbolName, size: 12, weight: .semibold)
         button.imagePosition = .imageLeading
-        button.heightAnchor.constraint(greaterThanOrEqualToConstant: primary ? 40 : 34).isActive = true
-        if primary { button.bezelColor = .systemGreen; button.contentTintColor = .systemGreen }
+        button.heightAnchor.constraint(greaterThanOrEqualToConstant: primary ? 36 : 30).isActive = true
+        if primary { button.bezelColor = .systemBlue; button.contentTintColor = .systemBlue }
     }
     private func symbol(_ name: String, size: CGFloat, weight: NSFont.Weight) -> NSImage {
         let configuration = NSImage.SymbolConfiguration(pointSize: size, weight: weight)
@@ -1005,6 +1117,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     private func logFillColor() -> NSColor {
         isDarkAppearance() ? NSColor(calibratedWhite: 0.09, alpha: 1) : NSColor(calibratedWhite: 0.96, alpha: 1)
+    }
+    private func readyAccentColor() -> NSColor {
+        isDarkAppearance() ? .systemGreen : .systemTeal
     }
     private func appearanceIndex() -> Int {
         switch appearancePreference() {
@@ -1030,6 +1145,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             box.fillColor = materialFillColor()
             box.borderColor = materialBorderColor()
         }
+        navigationBarView?.layer?.borderColor = materialBorderColor().cgColor
+        navigationBarView?.layer?.shadowOpacity = isDarkAppearance() ? 0.24 : 0.08
+        statusPanelView?.layer?.borderColor = materialBorderColor().cgColor
         displayStackView?.layer?.backgroundColor = displayFillColor().cgColor
         displayStackView?.layer?.borderColor = materialBorderColor().cgColor
         logView.backgroundColor = logFillColor()
@@ -1037,18 +1155,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     @objc private func appearanceChanged() {
         let value: String
-        switch appearancePicker.indexOfSelectedItem {
+        switch appearancePicker.selectedSegment {
         case 1: value = "light"
         case 2: value = "dark"
         default: value = "system"
         }
         applyAppearance(value, persist: true)
+        refresh()
     }
     private func collectFields() { model.deviceIP = deviceField.stringValue; model.hostIP = hostField.stringValue; model.focusMinutes = focusField.stringValue; model.restMinutes = restField.stringValue; model.appID = appIDField.stringValue; model.appSecret = appSecretField.stringValue; model.repoPath = repoField.stringValue }
     private func populateFieldsFromModel() { deviceField.stringValue = model.deviceIP; hostField.stringValue = model.hostIP; focusField.stringValue = model.focusMinutes; restField.stringValue = model.restMinutes; appIDField.stringValue = model.appID; repoField.stringValue = model.repoPath }
     private func updateReadiness(_ index: Int, title: String, ready: Bool, partial: Bool = false) {
         guard readinessLabels.indices.contains(index) else { return }
-        let color: NSColor = ready ? .systemGreen : (partial ? .systemOrange : .tertiaryLabelColor)
+        let color: NSColor = ready ? readyAccentColor() : (partial ? .systemOrange : .tertiaryLabelColor)
         readinessLabels[index].stringValue = title
         readinessLabels[index].textColor = ready || partial ? color : .secondaryLabelColor
         readinessIcons[index].contentTintColor = color
@@ -1078,7 +1197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let serviceTitle = self.model.areServicesRunning ? "助手运行中" : (self.model.isReadyToStart ? "可以启动" : (self.model.areServicesInstalled ? "助手已停止" : "待首次启动"))
             self.updateReadiness(3, title: serviceTitle, ready: self.model.areServicesRunning || self.model.isReadyToStart, partial: self.model.areServicesInstalled)
             self.operationIcon.image = self.symbol(self.model.isBusy ? "clock.arrow.circlepath" : (self.model.status.contains("失败") || self.model.status.contains("未通过") || self.model.status.contains("未完成") ? "exclamationmark.triangle.fill" : "info.circle.fill"), size: 20, weight: .semibold)
-            self.operationIcon.contentTintColor = self.model.isBusy ? .systemBlue : (self.model.status.contains("失败") || self.model.status.contains("未通过") || self.model.status.contains("未完成") ? .systemOrange : .systemGreen)
+            self.operationIcon.contentTintColor = self.model.isBusy ? .systemBlue : (self.model.status.contains("失败") || self.model.status.contains("未通过") || self.model.status.contains("未完成") ? .systemOrange : self.readyAccentColor())
             if self.model.isBusy { self.busyIndicator.startAnimation(nil) } else { self.busyIndicator.stopAnimation(nil) }
             self.authorizeButton.title = self.model.isOAuthRunning ? "重新开始授权" : (self.model.isAuthorized ? "重新授权 Lark" : "授权 Lark")
             self.audioStatusLabel.stringValue = self.model.customAudioStatus
