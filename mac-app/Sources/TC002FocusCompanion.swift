@@ -58,6 +58,11 @@ final class AppModel {
     private var restartOAuthWhenStopped = false
 
     var isOAuthRunning: Bool { oauthProcess?.isRunning == true }
+    var isReadyToStart: Bool {
+        isEnvironmentReady && isLarkVerified && isDeviceReachable
+            && !deviceIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !hostIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     func load() {
         let defaults = FileManager.default.currentDirectoryPath
@@ -86,11 +91,87 @@ final class AppModel {
         notify()
     }
 
+    func autoValidateSavedConfiguration() {
+        guard !isBusy else { return }
+        let repo = repoPath
+        let device = deviceIP.trimmingCharacters(in: .whitespacesAndNewlines)
+        let host = hostIP.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shouldCheckDevice = !device.isEmpty && !host.isEmpty
+        let storedAppID = keychainValue(account: "app_id") ?? ""
+        let shouldCheckLark = isAuthorized && !appID.isEmpty && storedAppID == appID
+        isBusy = true
+        status = "正在自动检查已保存的配置…"
+        appendLog("启动检查：正在验证运行环境。")
+        notify()
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            var environmentError: Error?
+            var environmentReady = false
+            var deviceReachable = false
+            var larkVerified = false
+            var messages: [String] = []
+
+            do {
+                try Self.preflight(repo: repo)
+                environmentReady = true
+                messages.append("✓ 运行环境检查通过")
+            } catch {
+                environmentError = error
+                messages.append("运行环境未通过：\(Self.friendlyError(error.localizedDescription))")
+            }
+
+            if shouldCheckDevice {
+                do {
+                    let target = device.contains(":") ? device : device + ":5555"
+                    let adb = Self.adbPath()
+                    _ = try Self.run(adb, args: adb == "/usr/bin/env" ? ["adb", "connect", target] : ["connect", target])
+                    let state = try Self.run(adb, args: adb == "/usr/bin/env" ? ["adb", "-s", target, "get-state"] : ["-s", target, "get-state"])
+                    guard state.trimmingCharacters(in: .whitespacesAndNewlines) == "device" else { throw RunnerError.failed("ADB 未返回 device 状态") }
+                    deviceReachable = true
+                    messages.append("✓ TC002 自动连接检查通过")
+                } catch {
+                    messages.append("TC002 自动检查未通过：\(error.localizedDescription)")
+                }
+            }
+
+            if shouldCheckLark {
+                do {
+                    let node = Self.nodePath()
+                    let args = node == "/usr/bin/env" ? ["node", repo + "/bridge/setup-system-status.mjs"] : [repo + "/bridge/setup-system-status.mjs"]
+                    let output = try Self.run(node, args: args, cwd: repo)
+                    larkVerified = true
+                    messages.append(output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "✓ Lark 自动验证通过" : output.trimmingCharacters(in: .whitespacesAndNewlines))
+                } catch {
+                    messages.append("Lark 自动验证未通过：\(error.localizedDescription)")
+                }
+            }
+
+            self.updateOnMain {
+                self.isEnvironmentReady = environmentReady
+                if shouldCheckDevice { self.isDeviceReachable = deviceReachable }
+                if shouldCheckLark { self.isLarkVerified = larkVerified }
+                self.isBusy = false
+                messages.forEach { self.appendLog($0) }
+                if self.isReadyToStart {
+                    self.status = "自动检查通过，可以直接点击“启动专注时钟”"
+                } else if environmentReady {
+                    self.status = "自动检查完成；请继续填写或验证尚未就绪的项目"
+                } else {
+                    self.status = "运行环境检查未通过，请查看日志"
+                }
+                self.notify()
+                if let issue = environmentError as? EnvironmentError {
+                    self.onEnvironmentInstallOffer?(issue.brewPackages, Self.friendlyError(issue.localizedDescription))
+                }
+            }
+        }
+    }
+
     var readinessSummary: String {
         let environment = isEnvironmentReady ? "✓ 运行环境就绪" : "○ 待检查运行环境"
         let lark = isLarkVerified ? "✓ Lark 权限与系统状态正常" : (isAuthorized ? "◐ Lark 凭据已保存，待验证" : "○ 待授权 Lark")
         let device = isDeviceReachable ? "✓ TC002 可连接" : "○ 待测试 TC002 连接"
-        let services = areServicesRunning ? "✓ 电脑助手正在运行" : (areServicesInstalled ? "○ 电脑助手已停止" : "○ 电脑助手将在首次启动时安装")
+        let services = areServicesRunning ? "✓ 电脑助手正在运行" : (isReadyToStart ? "✓ 配置已验证，可以启动" : (areServicesInstalled ? "○ 电脑助手已停止" : "○ 电脑助手将在首次启动时安装"))
         return [environment, lark, device, services].joined(separator: "\n")
     }
 
@@ -424,7 +505,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var readinessCards: [NSBox] = []
 
     static func main() { let app = NSApplication.shared; let delegate = AppDelegate(); app.delegate = delegate; app.setActivationPolicy(.regular); withExtendedLifetime(delegate) { app.run() } }
-    func applicationDidFinishLaunching(_ notification: Notification) { model.onChange = { [weak self] in self?.refresh() }; model.onEnvironmentInstallOffer = { [weak self] packages, message in self?.offerEnvironmentInstall(packages: packages, reason: message) }; buildWindow(); model.load(); populateFieldsFromModel(); refresh() }
+    func applicationDidFinishLaunching(_ notification: Notification) { model.onChange = { [weak self] in self?.refresh() }; model.onEnvironmentInstallOffer = { [weak self] packages, message in self?.offerEnvironmentInstall(packages: packages, reason: message) }; buildWindow(); model.load(); populateFieldsFromModel(); refresh(); model.autoValidateSavedConfiguration() }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationWillTerminate(_ notification: Notification) { collectFields(); model.save() }
 
@@ -834,8 +915,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.updateReadiness(0, title: self.model.isEnvironmentReady ? "环境就绪" : "待检查环境", ready: self.model.isEnvironmentReady)
             self.updateReadiness(1, title: self.model.isLarkVerified ? "Lark 已验证" : (self.model.isAuthorized ? "Lark 待验证" : "待授权 Lark"), ready: self.model.isLarkVerified, partial: self.model.isAuthorized)
             self.updateReadiness(2, title: self.model.isDeviceReachable ? "TC002 已连接" : "待连接 TC002", ready: self.model.isDeviceReachable)
-            let serviceTitle = self.model.areServicesRunning ? "助手运行中" : (self.model.areServicesInstalled ? "助手已停止" : "待首次启动")
-            self.updateReadiness(3, title: serviceTitle, ready: self.model.areServicesRunning, partial: self.model.areServicesInstalled)
+            let serviceTitle = self.model.areServicesRunning ? "助手运行中" : (self.model.isReadyToStart ? "可以启动" : (self.model.areServicesInstalled ? "助手已停止" : "待首次启动"))
+            self.updateReadiness(3, title: serviceTitle, ready: self.model.areServicesRunning || self.model.isReadyToStart, partial: self.model.areServicesInstalled)
             self.operationIcon.image = self.symbol(self.model.isBusy ? "clock.arrow.circlepath" : (self.model.status.contains("失败") || self.model.status.contains("未通过") || self.model.status.contains("未完成") ? "exclamationmark.triangle.fill" : "info.circle.fill"), size: 20, weight: .semibold)
             self.operationIcon.contentTintColor = self.model.isBusy ? .systemBlue : (self.model.status.contains("失败") || self.model.status.contains("未通过") || self.model.status.contains("未完成") ? .systemOrange : .systemGreen)
             if self.model.isBusy { self.busyIndicator.startAnimation(nil) } else { self.busyIndicator.stopAnimation(nil) }
