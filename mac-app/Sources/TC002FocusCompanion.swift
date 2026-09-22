@@ -498,8 +498,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let deviceField = NSTextField(); private let hostField = NSTextField(); private let focusField = NSTextField(); private let restField = NSTextField(); private let appIDField = NSTextField(); private let appSecretField = NSSecureTextField(); private let repoField = NSTextField(); private let statusField = NSTextField(labelWithString: ""); private let logView = NSTextView()
     private let startButton = NSButton(title: "启动专注时钟", target: nil, action: nil); private let stopButton = NSButton(title: "停止电脑助手", target: nil, action: nil); private let rebootButton = NSButton(title: "恢复原生界面（重启时钟）", target: nil, action: nil); private let authorizeButton = NSButton(title: "授权 Lark", target: nil, action: nil)
     private let environmentButton = NSButton(title: "检查运行环境", target: nil, action: nil); private let deviceButton = NSButton(title: "测试时钟连接", target: nil, action: nil); private let verifyLarkButton = NSButton(title: "验证 Lark 配置", target: nil, action: nil)
+    private let advancedButton = NSButton(title: "显示高级设置", target: nil, action: nil)
     private let busyIndicator = NSProgressIndicator()
     private let operationIcon = NSImageView()
+    private var advancedSection: NSBox?
     private var readinessLabels: [NSTextField] = []
     private var readinessIcons: [NSImageView] = []
     private var readinessCards: [NSBox] = []
@@ -576,7 +578,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         stack.addArrangedSubview(section("授权 Lark", step: "03", symbol: "person.crop.circle.badge.checkmark", accent: .systemIndigo, height: 184, rows: [row("App ID", appIDField, "Lark 自建应用 App ID"), row("App Secret", appSecretField, "只写入 macOS 钥匙串"), buttonGroup([authorizeButton, verifyLarkButton])]))
 
         stack.addArrangedSubview(section("专注节奏", step: "04", symbol: "timer", accent: .systemGreen, height: 146, rows: [row("专注（分钟）", focusField, "45"), row("休息（分钟）", restField, "5")]))
-        stack.addArrangedSubview(section("高级设置", step: "", symbol: "gearshape.fill", accent: .secondaryLabelColor, height: 108, rows: [row("项目目录", repoField, "App 内置或 Git 仓库目录")]))
+        advancedButton.target = self
+        advancedButton.action = #selector(toggleAdvanced)
+        advancedButton.bezelStyle = .inline
+        advancedButton.controlSize = .small
+        advancedButton.font = .systemFont(ofSize: 12, weight: .medium)
+        advancedButton.image = symbol("chevron.right", size: 10, weight: .semibold)
+        advancedButton.imagePosition = .imageLeading
+        advancedButton.contentTintColor = .secondaryLabelColor
+        advancedButton.toolTip = "仅在使用自定义源码目录时需要修改"
+        stack.addArrangedSubview(advancedButton)
+        let advanced = section("高级设置", step: "", symbol: "gearshape.fill", accent: .secondaryLabelColor, height: 108, rows: [row("项目目录", repoField, "通常无需修改")])
+        advanced.isHidden = true
+        advancedSection = advanced
+        stack.addArrangedSubview(advanced)
 
         startButton.target = self; startButton.action = #selector(startFocus); startButton.keyEquivalent = "\r"
         stopButton.target = self; stopButton.action = #selector(stopServices)
@@ -786,7 +801,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func logCard() -> NSBox {
         let box = card()
         box.widthAnchor.constraint(equalToConstant: 736).isActive = true
-        box.heightAnchor.constraint(equalToConstant: 220).isActive = true
+        box.heightAnchor.constraint(equalToConstant: 246).isActive = true
         let title = NSTextField(labelWithString: "运行日志")
         title.font = .systemFont(ofSize: 14, weight: .semibold)
         title.usesSingleLineMode = true
@@ -817,13 +832,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         logView.isVerticallyResizable = true
         logView.isHorizontallyResizable = false
         logView.autoresizingMask = [.width]
-        logView.frame = NSRect(x: 0, y: 0, width: 704, height: 158)
-        logView.minSize = NSSize(width: 0, height: 158)
+        logView.frame = NSRect(x: 0, y: 0, width: 704, height: 184)
+        logView.minSize = NSSize(width: 0, height: 184)
         logView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        logView.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
+        logView.font = .systemFont(ofSize: 13, weight: .regular)
         logView.textColor = .labelColor
         logView.backgroundColor = NSColor.textBackgroundColor.withAlphaComponent(0.55)
-        logView.textContainerInset = NSSize(width: 10, height: 9)
+        logView.textContainerInset = NSSize(width: 14, height: 12)
+        logView.textContainer?.lineFragmentPadding = 2
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 3
+        paragraphStyle.paragraphSpacing = 2
+        logView.defaultParagraphStyle = paragraphStyle
         logView.textContainer?.widthTracksTextView = true
         logView.textContainer?.containerSize = NSSize(width: 704, height: CGFloat.greatestFiniteMagnitude)
         let logScroll = NSScrollView()
@@ -848,7 +868,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             inner.bottomAnchor.constraint(equalTo: box.contentView!.bottomAnchor, constant: -14),
             header.widthAnchor.constraint(equalTo: inner.widthAnchor),
             logScroll.widthAnchor.constraint(equalTo: inner.widthAnchor),
-            logScroll.heightAnchor.constraint(equalToConstant: 158)
+            logScroll.heightAnchor.constraint(equalToConstant: 184)
         ])
         return box
     }
@@ -909,6 +929,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async {
             self.statusField.stringValue = self.model.status
             self.logView.string = self.model.logText
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.lineSpacing = 3
+            paragraphStyle.paragraphSpacing = 2
+            let logRange = NSRange(location: 0, length: self.logView.string.utf16.count)
+            self.logView.textStorage?.setAttributes([
+                .font: NSFont.systemFont(ofSize: 13, weight: .regular),
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paragraphStyle
+            ], range: logRange)
             if let container = self.logView.textContainer { self.logView.layoutManager?.ensureLayout(for: container) }
             self.logView.needsDisplay = true
             self.logView.scrollToEndOfDocument(nil)
@@ -936,6 +965,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func checkDevice() { collectFields(); model.checkDevice() }
     @objc private func verifyLark() { collectFields(); model.verifyLark() }
     @objc private func authorize() { collectFields(); model.authorizeLark() }
+    @objc private func toggleAdvanced() {
+        guard let advancedSection else { return }
+        advancedSection.isHidden.toggle()
+        let isVisible = !advancedSection.isHidden
+        advancedButton.title = isVisible ? "隐藏高级设置" : "显示高级设置"
+        advancedButton.image = symbol(isVisible ? "chevron.down" : "chevron.right", size: 10, weight: .semibold)
+    }
     @objc private func startFocus() { collectFields(); model.startFocus() }
     @objc private func stopServices() { model.stopComputerServices() }
     @objc private func clearLog() { model.logText = ""; model.onChange?() }
