@@ -39,6 +39,7 @@ cat <<PLAN
   EMQX      ${EMQX_STATUS}
   project   ${ROOT}
   checks    npm ci + automated tests + runtime bundle checksum + macOS App build
+  services  完成 Lark 授权并在 App 点击“启动专注时钟”后创建
 PLAN
 
 [ "$APPLY" -eq 1 ] || {
@@ -58,4 +59,5 @@ npm test
 bash companion/verify-runtime-bundle.sh
 bash mac-app/build-app.sh
 open "$ROOT/mac-app/dist/TC002FocusCompanion.app"
-printf '\n准备完成。请在 App 内完成 Lark 授权，填写时钟 IP 后点击“启动专注时钟”。\n'
+printf '\n环境与 App 已准备完成。此时显示“待首次启动”是正常的。\n'
+printf '请在 App 内完成 Lark 授权、填写时钟 IP，再点击“启动专注时钟”；随后三个后台助手才会安装并运行。\n'

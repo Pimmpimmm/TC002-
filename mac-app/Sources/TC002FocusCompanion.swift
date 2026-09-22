@@ -50,6 +50,7 @@ final class AppModel {
     var isLarkVerified = false
     var isEnvironmentReady = false
     var isDeviceReachable = false
+    var areServicesInstalled = false
     var areServicesRunning = false
     var onChange: (() -> Void)?
     var onEnvironmentInstallOffer: (([String], String) -> Void)?
@@ -73,7 +74,12 @@ final class AppModel {
         if hostIP.isEmpty { hostIP = detectHostIP() }
         if appID.isEmpty { appID = (try? Self.run("/usr/bin/security", args: ["find-generic-password", "-s", keychainService, "-a", "app_id", "-w"]))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
         refreshAuthorizationState()
-        areServicesRunning = ["com.tc002.focus-emqx", "com.tc002.focus-bridge", "com.tc002.focus-mqtt"].allSatisfy {
+        let serviceLabels = ["com.tc002.focus-emqx", "com.tc002.focus-bridge", "com.tc002.focus-mqtt"]
+        let launchAgents = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/LaunchAgents", isDirectory: true)
+        areServicesInstalled = serviceLabels.allSatisfy {
+            FileManager.default.fileExists(atPath: launchAgents.appendingPathComponent("\($0).plist").path)
+        }
+        areServicesRunning = serviceLabels.allSatisfy {
             (try? Self.run("/bin/launchctl", args: ["list", $0])) != nil
         }
         status = isAuthorized ? "Lark 凭据已保存；启动前会再验证权限" : "请从第 1 步开始配置"
@@ -84,7 +90,7 @@ final class AppModel {
         let environment = isEnvironmentReady ? "✓ 运行环境就绪" : "○ 待检查运行环境"
         let lark = isLarkVerified ? "✓ Lark 权限与系统状态正常" : (isAuthorized ? "◐ Lark 凭据已保存，待验证" : "○ 待授权 Lark")
         let device = isDeviceReachable ? "✓ TC002 可连接" : "○ 待测试 TC002 连接"
-        let services = areServicesRunning ? "✓ 电脑助手正在运行" : "○ 电脑助手未启动"
+        let services = areServicesRunning ? "✓ 电脑助手正在运行" : (areServicesInstalled ? "○ 电脑助手已停止" : "○ 电脑助手将在首次启动时安装")
         return [environment, lark, device, services].joined(separator: "\n")
     }
 
@@ -232,7 +238,7 @@ final class AppModel {
                 let lark = try Self.run(node, args: statusArgs, cwd: repo)
                 self.updateOnMain { self.isLarkVerified = true; self.appendLog(lark); self.status = "3/4 安装并启动电脑助手…"; self.notify() }
                 let install = try Self.run("/bin/bash", args: [repo + "/companion/install-macos.sh", "--lan-host", host, "--mode", "real", "--focus-seconds", String(focusSeconds), "--rest-seconds", String(restSeconds), "--apply"], cwd: repo)
-                self.updateOnMain { self.appendLog(install); self.areServicesRunning = true; self.status = "4/4 配置并启动 TC002…"; self.notify() }
+                self.updateOnMain { self.appendLog(install); self.areServicesInstalled = true; self.areServicesRunning = true; self.status = "4/4 配置并启动 TC002…"; self.notify() }
                 let configure = try Self.run("/bin/bash", args: [repo + "/companion/configure-device.sh", "--adb-target", device, "--lan-host", host, "--focus-seconds", String(focusSeconds), "--rest-seconds", String(restSeconds)], cwd: repo)
                 self.updateOnMain { self.appendLog(configure); self.isDeviceReachable = true; self.notify() }
                 let launch = try Self.run("/bin/bash", args: [repo + "/companion/start-focus.sh", "--adb-target", device], cwd: repo)
@@ -828,7 +834,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.updateReadiness(0, title: self.model.isEnvironmentReady ? "环境就绪" : "待检查环境", ready: self.model.isEnvironmentReady)
             self.updateReadiness(1, title: self.model.isLarkVerified ? "Lark 已验证" : (self.model.isAuthorized ? "Lark 待验证" : "待授权 Lark"), ready: self.model.isLarkVerified, partial: self.model.isAuthorized)
             self.updateReadiness(2, title: self.model.isDeviceReachable ? "TC002 已连接" : "待连接 TC002", ready: self.model.isDeviceReachable)
-            self.updateReadiness(3, title: self.model.areServicesRunning ? "助手运行中" : "助手未启动", ready: self.model.areServicesRunning)
+            let serviceTitle = self.model.areServicesRunning ? "助手运行中" : (self.model.areServicesInstalled ? "助手已停止" : "待首次启动")
+            self.updateReadiness(3, title: serviceTitle, ready: self.model.areServicesRunning, partial: self.model.areServicesInstalled)
             self.operationIcon.image = self.symbol(self.model.isBusy ? "clock.arrow.circlepath" : (self.model.status.contains("失败") || self.model.status.contains("未通过") || self.model.status.contains("未完成") ? "exclamationmark.triangle.fill" : "info.circle.fill"), size: 20, weight: .semibold)
             self.operationIcon.contentTintColor = self.model.isBusy ? .systemBlue : (self.model.status.contains("失败") || self.model.status.contains("未通过") || self.model.status.contains("未完成") ? .systemOrange : .systemGreen)
             if self.model.isBusy { self.busyIndicator.startAnimation(nil) } else { self.busyIndicator.stopAnimation(nil) }

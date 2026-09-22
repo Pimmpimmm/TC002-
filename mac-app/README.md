@@ -25,9 +25,19 @@ Lark App Secret、OAuth token、refresh token 和 bridge shared secret 不写入
 
 ## 新 Mac 准备
 
-仓库根目录提供 `一键准备TC002.command`。它会安装 Homebrew 中缺少的
+不方便让 Agent 直接执行多次网络下载时，可以让用户在 macOS“终端”运行：
+
+```bash
+curl -fsSL --retry 3 https://raw.githubusercontent.com/Pimmpimmm/ulanzi-tc002-focus-clock/main/install-from-github.sh | /bin/bash -s -- --apply
+```
+
+这条命令不依赖 Git，默认下载到 `~/ulanzi-tc002-focus-clock`。仓库根目录也提供
+`一键准备TC002.command`。它会安装 Homebrew 中缺少的
 Node.js、EMQX 和 ADB，执行测试和 bundle 完整性校验，然后构建并打开 App。
 Homebrew 和 Apple Command Line Tools 仍需要用户先安装。
+
+bootstrap 完成后显示“待首次启动”是正常的：为了避免在 Lark 凭据和局域网地址
+未确认时启动错误服务，LaunchAgent 会延迟到用户完成授权并点击“启动专注时钟”后创建。
 
 ## 运行前提
 

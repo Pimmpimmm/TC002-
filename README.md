@@ -83,11 +83,24 @@ App Secret 和共享密钥只写入当前用户的 macOS 钥匙串，不写进�
 最新代码、预演环境检查，再安装依赖、构建并打开 GUI；Lark OAuth 和 TC002 的
 Wi-Fi ADB 配对仍由用户本人确认，凭据不会写入仓库：
 
+如果 Agent 的沙箱没有网络或主目录写入权限，不要让它反复申请下载。直接由用户在
+macOS“终端”运行下面这一条命令；它不依赖 Git，会从公开 GitHub 仓库下载、校验、
+安装依赖并打开 App：
+
+```bash
+curl -fsSL --retry 3 https://raw.githubusercontent.com/Pimmpimmm/ulanzi-tc002-focus-clock/main/install-from-github.sh | /bin/bash -s -- --apply
+```
+
+默认安装到 `~/ulanzi-tc002-focus-clock`。如果该目录已经存在，安装器会停止而不是
+覆盖；确认需要更新时可在末尾追加 `--replace`，旧目录会改名保留为备份。
+
 ```text
-请把 https://github.com/Pimmpimmm/ulanzi-tc002-focus-clock.git 部署到这台 macOS 电脑：先检查
-macOS 13+、Homebrew 和 Apple Command Line Tools，克隆仓库并阅读 README.md。
-运行 `bash bootstrap-macos.sh` 做预演，确认后运行
-`bash bootstrap-macos.sh --apply`。不要刷写 update.img、不要修改 /res、不要
+请把 Ulanzi TC002 Focus Clock 部署到这台 macOS 电脑。先检查 macOS 13+、
+Homebrew 和 Apple Command Line Tools，然后优先执行这一条公开仓库安装命令：
+`curl -fsSL --retry 3 https://raw.githubusercontent.com/Pimmpimmm/ulanzi-tc002-focus-clock/main/install-from-github.sh | /bin/bash -s -- --apply`。
+如果你的沙箱不允许联网或写入 `$HOME`，不要反复重试；把该命令原样给我，让我在
+macOS“终端”中执行，完成后你再从 `~/ulanzi-tc002-focus-clock` 继续验收。
+不要刷写 update.img、不要修改 /res、不要
 把 Lark Secret/Token 写入文件或发到聊天里。打开生成的 TC002FocusCompanion.app，
 让我在 GUI 中输入 TC002 的 Wi-Fi ADB 地址和自己的 Lark App 信息，并在浏览器
 完成 OAuth；然后点击“启动专注时钟”。最后运行测试和 bundle 校验，确认 EMQX、
@@ -102,7 +115,8 @@ Lark bridge、MQTT adapter、ADB 和 Lark 系统状态都正常，并只报告�
 ## 新 Mac 推荐入口
 
 先安装 [Homebrew](https://brew.sh) 和 Apple 命令行工具（`xcode-select --install`），
-然后克隆仓库，在 Finder 中双击 `一键准备TC002.command`，或运行：
+然后直接运行上面的一键下载命令。也可以手动克隆仓库，在 Finder 中双击
+`一键准备TC002.command`，或在仓库内运行：
 
 ```bash
 bash bootstrap-macos.sh --apply
@@ -111,6 +125,10 @@ bash bootstrap-macos.sh --apply
 该入口会安装/升级 Node.js、EMQX 和 ADB，执行自动测试与发布包校验，
 构建并打开 TC002 Focus Companion。用户只需在 App 内完成 Lark 授权、
 填写设备 IP 并点击“启动专注时钟”。Lark 授权必须由用户本人在浏览器确认。
+
+刚下载并打开 App 时显示“待首次启动”是正常状态，不代表安装失败。此时尚未创建
+LaunchAgent；完成 Lark 授权并点击“启动专注时钟”后，EMQX、Lark bridge 和
+MQTT adapter 才会安装并变为“助手运行中”。
 
 当前安全部署模式为临时部署：不刷固件，TC002 重启后恢复原生界面。
 新设备需要先在设备上开启 Wi-Fi ADB。

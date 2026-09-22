@@ -24,13 +24,18 @@ macOS 电脑；Agent 负责下载代码、检查环境、安装依赖、构建 G
 4. 每个会改变系统的命令先说明作用；优先使用仓库已有脚本，不要自行重写安装器。
 
 执行流程：
-1. 如果当前目录不是本项目，执行：
-   git clone --depth 1 https://github.com/Pimmpimmm/ulanzi-tc002-focus-clock.git "$HOME/ulanzi-tc002-focus-clock"
-   然后进入该目录；如果目录已存在，检查 remote、切到 main 并拉取最新代码。
+1. 如果当前目录不是本项目，优先运行仓库提供的一键下载器（不依赖 Git）：
+   curl -fsSL --retry 3 https://raw.githubusercontent.com/Pimmpimmm/ulanzi-tc002-focus-clock/main/install-from-github.sh | /bin/bash -s -- --apply
+   它会把公开仓库下载到 `$HOME/ulanzi-tc002-focus-clock`，校验 TC002 运行包，安装
+   缺少的依赖、运行测试、构建并打开 GUI。如果 Agent 沙箱阻止网络访问或写入
+   `$HOME`，不要循环重试或拆成多次下载；把上面这一条命令原样展示给用户，让用户
+   在 macOS“终端”中执行。用户确认完成后，再从该目录继续验收。
+   如果目录已存在，不要覆盖；检查它是否为本项目以及是否有用户修改。只有用户明确
+   同意更新时，才可在命令末尾追加 `--replace`；安装器会先把旧目录改名备份。
    如果工作区有未提交改动，先停止并报告，不要 reset、checkout -- 或覆盖用户文件。
    先阅读 README.md、AGENT_DOWNLOAD_PROMPT.md、mac-app/README.md 和
    companion/README.md，再开始安装。
-2. 运行一次预演：
+2. 如果代码已经由用户手动下载、或只需要从现有仓库继续，运行一次预演：
    bash bootstrap-macos.sh
    向用户展示缺少的依赖和将执行的动作。确认后运行：
    bash bootstrap-macos.sh --apply
@@ -63,7 +68,9 @@ macOS 电脑；Agent 负责下载代码、检查环境、安装依赖、构建 G
    bash companion/start-focus.sh --adb-target TC002_IP:5555
    这些命令只写设备可写的 device.conf 和 /tmp 运行包，不刷写固件。
 6. 验收：确认 `npm test`、`bash companion/verify-runtime-bundle.sh` 和
-   `bash mac-app/build-app.sh` 成功；确认三个 LaunchAgent
+   `bash mac-app/build-app.sh` 成功。注意：仅完成下载/bootstrap 后，GUI 显示
+   “待首次启动”是正常的，三个 LaunchAgent 还不应该存在。只有用户完成 Lark 授权、
+   填写设备信息并点击“启动专注时钟”后，才确认三个 LaunchAgent
    `com.tc002.focus-emqx`、`com.tc002.focus-bridge`、`com.tc002.focus-mqtt`
    已加载；确认 ADB 可连接；让用户在 TC002 上按中键开始一次专注，检查 Lark
    出现“专注中”系统状态，再提前退出并确认状态关闭。设备重启后应恢复原生界面。
@@ -79,4 +86,5 @@ bash bootstrap-macos.sh --apply
 ```
 
 然后在打开的 `TC002FocusCompanion.app` 中完成 Lark 授权、输入 TC002 IP，点击
-“启动专注时钟”。
+“启动专注时钟”。在点击前显示“待首次启动”是预期状态；点击成功后才会显示
+“助手运行中”。
