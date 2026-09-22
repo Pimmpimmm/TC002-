@@ -9,7 +9,7 @@
 	<key>CFBundleIdentifier</key>
 	<string>com.pimmpimmm.tc002-focus-companion</string>
 	<key>CFBundleIconFile</key>
-	<string>AppIcon</string>
+	<string>AppIcon.png</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>

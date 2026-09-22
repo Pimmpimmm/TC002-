@@ -549,15 +549,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let environmentButton = NSButton(title: "检查运行环境", target: nil, action: nil); private let deviceButton = NSButton(title: "测试时钟连接", target: nil, action: nil); private let verifyLarkButton = NSButton(title: "验证 Lark 配置", target: nil, action: nil)
     private let selectAudioButton = NSButton(title: "更换提示音", target: nil, action: nil); private let resetAudioButton = NSButton(title: "恢复默认", target: nil, action: nil); private let audioStatusLabel = NSTextField(labelWithString: "当前使用默认提示音")
     private let advancedButton = NSButton(title: "显示高级设置", target: nil, action: nil)
+    private let appearancePicker = NSPopUpButton(frame: .zero, pullsDown: false)
     private let busyIndicator = NSProgressIndicator()
     private let operationIcon = NSImageView()
+    private weak var displayStackView: NSStackView?
+    private var appearanceObserver: NSKeyValueObservation?
     private var advancedSection: NSBox?
+    private var materialCards: [NSBox] = []
     private var readinessLabels: [NSTextField] = []
     private var readinessIcons: [NSImageView] = []
     private var readinessCards: [NSBox] = []
 
     static func main() { let app = NSApplication.shared; let delegate = AppDelegate(); app.delegate = delegate; app.setActivationPolicy(.regular); withExtendedLifetime(delegate) { app.run() } }
-    func applicationDidFinishLaunching(_ notification: Notification) { model.onChange = { [weak self] in self?.refresh() }; model.onEnvironmentInstallOffer = { [weak self] packages, message in self?.offerEnvironmentInstall(packages: packages, reason: message) }; buildWindow(); model.load(); populateFieldsFromModel(); refresh(); model.autoValidateSavedConfiguration() }
+    func applicationDidFinishLaunching(_ notification: Notification) { restoreAppearance(); model.onChange = { [weak self] in self?.refresh() }; model.onEnvironmentInstallOffer = { [weak self] packages, message in self?.offerEnvironmentInstall(packages: packages, reason: message) }; buildWindow(); model.load(); populateFieldsFromModel(); refresh(); model.autoValidateSavedConfiguration(); appearanceObserver = NSApp.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in self?.refreshDynamicAppearance() } }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationWillTerminate(_ notification: Notification) { collectFields(); model.save() }
 
@@ -684,7 +688,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func hero() -> NSView {
         let box = card()
         box.widthAnchor.constraint(equalToConstant: 736).isActive = true
-        box.heightAnchor.constraint(equalToConstant: 132).isActive = true
+        box.heightAnchor.constraint(equalToConstant: 158).isActive = true
 
         let icon = NSImageView(image: symbol("timer", size: 36, weight: .semibold))
         icon.contentTintColor = .systemGreen
@@ -705,7 +709,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         badge.layer?.cornerRadius = 8
         badge.layer?.backgroundColor = NSColor.systemGreen.withAlphaComponent(0.10).cgColor
         badge.heightAnchor.constraint(equalToConstant: 22).isActive = true
-        let copy = NSStackView(views: [title, subtitle, badge])
+        appearancePicker.removeAllItems()
+        appearancePicker.addItems(withTitles: ["跟随系统", "浅色", "深色"])
+        appearancePicker.selectItem(at: appearanceIndex())
+        appearancePicker.target = self
+        appearancePicker.action = #selector(appearanceChanged)
+        appearancePicker.bezelStyle = .rounded
+        appearancePicker.controlSize = .small
+        appearancePicker.font = .systemFont(ofSize: 11, weight: .medium)
+        appearancePicker.widthAnchor.constraint(equalToConstant: 118).isActive = true
+        appearancePicker.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        appearancePicker.toolTip = "默认跟随 macOS 外观，也可以在这里临时切换"
+        let copy = NSStackView(views: [title, subtitle, badge, appearancePicker])
         copy.orientation = .vertical
         copy.alignment = .leading
         copy.spacing = 5
@@ -723,12 +738,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         displayStack.alignment = .centerX
         displayStack.spacing = 0
         displayStack.wantsLayer = true
-        displayStack.layer?.backgroundColor = NSColor(calibratedWhite: 0.035, alpha: 1).cgColor
+        displayStack.layer?.backgroundColor = NSColor.textBackgroundColor.withAlphaComponent(0.82).cgColor
         displayStack.layer?.cornerRadius = 12
         displayStack.layer?.borderWidth = 1
-        displayStack.layer?.borderColor = NSColor.white.withAlphaComponent(0.08).cgColor
+        displayStack.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.35).cgColor
         displayStack.widthAnchor.constraint(equalToConstant: 170).isActive = true
         displayStack.heightAnchor.constraint(equalToConstant: 66).isActive = true
+        displayStackView = displayStack
 
         let row = NSStackView(views: [icon, copy, NSView(), displayStack])
         row.orientation = .horizontal
@@ -796,10 +812,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let box = NSBox()
         box.boxType = .custom
         box.titlePosition = .noTitle
-        box.cornerRadius = 14
+        box.cornerRadius = 18
         box.borderWidth = 1
-        box.borderColor = NSColor.separatorColor.withAlphaComponent(0.45)
-        box.fillColor = NSColor.controlBackgroundColor.withAlphaComponent(0.80)
+        box.borderColor = materialBorderColor()
+        box.fillColor = materialFillColor()
+        materialCards.append(box)
         return box
     }
 
@@ -971,6 +988,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let configuration = NSImage.SymbolConfiguration(pointSize: size, weight: weight)
         return (NSImage(systemSymbolName: name, accessibilityDescription: nil) ?? NSImage()).withSymbolConfiguration(configuration) ?? NSImage()
     }
+    private func appearancePreference() -> String {
+        UserDefaults.standard.string(forKey: "TC002.appearance") ?? "system"
+    }
+    private func isDarkAppearance() -> Bool {
+        NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+    }
+    private func materialFillColor() -> NSColor {
+        isDarkAppearance() ? NSColor(calibratedWhite: 0.14, alpha: 1) : NSColor(calibratedWhite: 0.98, alpha: 1)
+    }
+    private func materialBorderColor() -> NSColor {
+        isDarkAppearance() ? NSColor.white.withAlphaComponent(0.16) : NSColor.black.withAlphaComponent(0.12)
+    }
+    private func displayFillColor() -> NSColor {
+        isDarkAppearance() ? NSColor(calibratedWhite: 0.06, alpha: 1) : NSColor(calibratedWhite: 0.92, alpha: 1)
+    }
+    private func logFillColor() -> NSColor {
+        isDarkAppearance() ? NSColor(calibratedWhite: 0.09, alpha: 1) : NSColor(calibratedWhite: 0.96, alpha: 1)
+    }
+    private func appearanceIndex() -> Int {
+        switch appearancePreference() {
+        case "light": return 1
+        case "dark": return 2
+        default: return 0
+        }
+    }
+    private func restoreAppearance() {
+        applyAppearance(appearancePreference(), persist: false)
+    }
+    private func applyAppearance(_ value: String, persist: Bool) {
+        switch value {
+        case "light": NSApp.appearance = NSAppearance(named: .aqua)
+        case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+        default: NSApp.appearance = nil
+        }
+        if persist { UserDefaults.standard.set(value, forKey: "TC002.appearance") }
+        refreshDynamicAppearance()
+    }
+    private func refreshDynamicAppearance() {
+        for box in materialCards where !readinessCards.contains(where: { $0 === box }) {
+            box.fillColor = materialFillColor()
+            box.borderColor = materialBorderColor()
+        }
+        displayStackView?.layer?.backgroundColor = displayFillColor().cgColor
+        displayStackView?.layer?.borderColor = materialBorderColor().cgColor
+        logView.backgroundColor = logFillColor()
+        logView.textColor = NSColor.labelColor
+    }
+    @objc private func appearanceChanged() {
+        let value: String
+        switch appearancePicker.indexOfSelectedItem {
+        case 1: value = "light"
+        case 2: value = "dark"
+        default: value = "system"
+        }
+        applyAppearance(value, persist: true)
+    }
     private func collectFields() { model.deviceIP = deviceField.stringValue; model.hostIP = hostField.stringValue; model.focusMinutes = focusField.stringValue; model.restMinutes = restField.stringValue; model.appID = appIDField.stringValue; model.appSecret = appSecretField.stringValue; model.repoPath = repoField.stringValue }
     private func populateFieldsFromModel() { deviceField.stringValue = model.deviceIP; hostField.stringValue = model.hostIP; focusField.stringValue = model.focusMinutes; restField.stringValue = model.restMinutes; appIDField.stringValue = model.appID; repoField.stringValue = model.repoPath }
     private func updateReadiness(_ index: Int, title: String, ready: Bool, partial: Bool = false) {
@@ -998,6 +1071,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let container = self.logView.textContainer { self.logView.layoutManager?.ensureLayout(for: container) }
             self.logView.needsDisplay = true
             self.logView.scrollToEndOfDocument(nil)
+            self.refreshDynamicAppearance()
             self.updateReadiness(0, title: self.model.isEnvironmentReady ? "环境就绪" : "待检查环境", ready: self.model.isEnvironmentReady)
             self.updateReadiness(1, title: self.model.isLarkVerified ? "Lark 已验证" : (self.model.isAuthorized ? "Lark 待验证" : "待授权 Lark"), ready: self.model.isLarkVerified, partial: self.model.isAuthorized)
             self.updateReadiness(2, title: self.model.isDeviceReachable ? "TC002 已连接" : "待连接 TC002", ready: self.model.isDeviceReachable)

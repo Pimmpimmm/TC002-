@@ -28,6 +28,7 @@ lipo -create "$BUILD_DIR/TC002FocusCompanion-arm64" "$BUILD_DIR/TC002FocusCompan
 
 cp "$ROOT/mac-app/Info.plist" "$APP_DIR/Contents/Info.plist"
 cp "$ROOT/mac-app/Assets/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
+cp "$ROOT/mac-app/Assets/AppIcon.png" "$APP_DIR/Contents/Resources/AppIcon.png"
 cp -R "$ROOT/bridge" "$ROOT/companion" "$ROOT/probes" "$APP_DIR/Contents/Resources/tc002-repo/"
 cp -R "$ROOT/device/TC002_Focus_Probe/TemporaryFocusRelease" "$APP_DIR/Contents/Resources/tc002-repo/device/TC002_Focus_Probe/"
 chmod +x "$APP_DIR/Contents/MacOS/TC002FocusCompanion"
