@@ -93,13 +93,20 @@ curl -fsSL --retry 3 https://raw.githubusercontent.com/Pimmpimmm/ulanzi-tc002-fo
 
 默认安装到 `~/ulanzi-tc002-focus-clock`。如果该目录已经存在，安装器会停止而不是
 覆盖；确认需要更新时可在末尾追加 `--replace`，旧目录会改名保留为备份。
+若自动下载失败，安装器会尝试在浏览器打开项目的
+[GitHub ZIP 下载地址](https://github.com/Pimmpimmm/ulanzi-tc002-focus-clock/archive/refs/heads/main.zip)。
+如果连最初的 `raw.githubusercontent.com` 脚本都无法取得，安装器无法运行；此时由
+Agent 打开上面的地址，或由用户在浏览器下载 ZIP。解压后进入项目目录运行
+`bash bootstrap-macos.sh --apply`。缺少 Homebrew 或命令行工具时，脚本会打开对应
+官方页面；浏览器也被沙箱限制时会打印地址供复制。
 
 ```text
 请把 Ulanzi TC002 Focus Clock 部署到这台 macOS 电脑。先检查 macOS 13+、
 Homebrew 和 Apple Command Line Tools，然后优先执行这一条公开仓库安装命令：
 `curl -fsSL --retry 3 https://raw.githubusercontent.com/Pimmpimmm/ulanzi-tc002-focus-clock/main/install-from-github.sh | /bin/bash -s -- --apply`。
 如果你的沙箱不允许联网或写入 `$HOME`，不要反复重试；把该命令原样给我，让我在
-macOS“终端”中执行，完成后你再从 `~/ulanzi-tc002-focus-clock` 继续验收。
+macOS“终端”中执行；也可以打开项目 GitHub ZIP 下载地址让我在浏览器下载。完成后
+你再从 `~/ulanzi-tc002-focus-clock` 或解压目录继续验收。
 不要刷写 update.img、不要修改 /res、不要
 把 Lark Secret/Token 写入文件或发到聊天里。打开生成的 TC002FocusCompanion.app，
 让我在 GUI 中输入 TC002 的 Wi-Fi ADB 地址和自己的 Lark App 信息，并在浏览器

@@ -5,10 +5,24 @@ set -euo pipefail
 REPOSITORY="Pimmpimmm/ulanzi-tc002-focus-clock"
 BRANCH="${TC002_GITHUB_BRANCH:-main}"
 DESTINATION="${TC002_INSTALL_DIR:-$HOME/ulanzi-tc002-focus-clock}"
+PROJECT_URL="https://github.com/$REPOSITORY"
+DOWNLOAD_URL="$PROJECT_URL/archive/refs/heads/$BRANCH.zip"
 APPLY=0
 REPLACE=0
 
 alarm() { printf 'ALARM %s\n' "$*" >&2; exit 2; }
+
+manual_download() {
+  printf '请从项目 GitHub 页面手动下载 ZIP：%s\n' "$DOWNLOAD_URL" >&2
+  printf '解压后在 macOS“终端”进入项目目录，运行：bash bootstrap-macos.sh --apply\n' >&2
+  if command -v open >/dev/null 2>&1; then
+    if open "$DOWNLOAD_URL" >/dev/null 2>&1; then
+      printf '已在浏览器打开官方下载地址。\n' >&2
+    else
+      printf '无法自动打开浏览器，请复制上面的地址。\n' >&2
+    fi
+  fi
+}
 
 usage() {
   cat <<'USAGE'
@@ -44,7 +58,10 @@ esac
   alarm "目标目录已存在：${DESTINATION}。确认保留旧副本后，加 --replace 重试"
 
 PARENT="$(dirname "$DESTINATION")"
-mkdir -p "$PARENT"
+if ! mkdir -p "$PARENT"; then
+  manual_download
+  alarm "无法写入安装目录的上级目录：$PARENT；请在本机“终端”执行安装"
+fi
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/tc002-github.XXXXXX")"
 trap 'rm -rf "$WORK_DIR"' EXIT INT TERM
 ARCHIVE="$WORK_DIR/source.tar.gz"
@@ -52,10 +69,16 @@ EXTRACTED="$WORK_DIR/extracted"
 mkdir -p "$EXTRACTED"
 
 printf '正在从 GitHub 下载 %s（分支：%s）…\n' "$REPOSITORY" "$BRANCH"
-curl --fail --location --silent --show-error --retry 3 --connect-timeout 20 \
+if ! curl --fail --location --silent --show-error --retry 3 --connect-timeout 20 \
   "https://codeload.github.com/$REPOSITORY/tar.gz/refs/heads/$BRANCH" \
-  --output "$ARCHIVE"
-tar -xzf "$ARCHIVE" -C "$EXTRACTED"
+  --output "$ARCHIVE"; then
+  manual_download
+  alarm "GitHub 自动下载失败"
+fi
+if ! tar -xzf "$ARCHIVE" -C "$EXTRACTED"; then
+  manual_download
+  alarm "下载的压缩包无法解压"
+fi
 
 SOURCE=""
 for CANDIDATE in "$EXTRACTED"/*; do

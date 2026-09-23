@@ -28,8 +28,14 @@ macOS 电脑；Agent 负责下载代码、检查环境、安装依赖、构建 G
    curl -fsSL --retry 3 https://raw.githubusercontent.com/Pimmpimmm/ulanzi-tc002-focus-clock/main/install-from-github.sh | /bin/bash -s -- --apply
    它会把公开仓库下载到 `$HOME/ulanzi-tc002-focus-clock`，校验 TC002 运行包，安装
    缺少的依赖、运行测试、构建并打开 GUI。如果 Agent 沙箱阻止网络访问或写入
-   `$HOME`，不要循环重试或拆成多次下载；把上面这一条命令原样展示给用户，让用户
-   在 macOS“终端”中执行。用户确认完成后，再从该目录继续验收。
+   `$HOME`，不要循环重试或拆成多次下载。先尝试在用户的浏览器打开项目官方
+   GitHub ZIP 下载地址：
+   https://github.com/Pimmpimmm/ulanzi-tc002-focus-clock/archive/refs/heads/main.zip
+   浏览器也打不开时，把上面那条安装命令和这个地址原样展示给用户，让用户在
+   macOS“终端”或浏览器中操作。用户下载 ZIP 后，解压、进入项目目录并运行
+   `bash bootstrap-macos.sh --apply`；完成后再继续验收。不要把网络沙箱错误误报为
+   仓库损坏。注意初始 `curl | bash` 中若 `curl` 失败，脚本可能根本没有启动；必须
+   检查下载报错和目标目录，不能只看管道退出码。
    如果目录已存在，不要覆盖；检查它是否为本项目以及是否有用户修改。只有用户明确
    同意更新时，才可在命令末尾追加 `--replace`；安装器会先把旧目录改名备份。
    如果工作区有未提交改动，先停止并报告，不要 reset、checkout -- 或覆盖用户文件。
@@ -43,8 +49,10 @@ macOS 电脑；Agent 负责下载代码、检查环境、安装依赖、构建 G
    运行时 bundle 校验和 universal macOS App 构建，并打开 App。不要跳过失败的
    测试或校验；失败时保留错误信息并先排查。
 3. 如果 Homebrew 或 Apple Command Line Tools 不存在，告诉用户先按官方方式安装，
-   不要下载第三方安装包。若 GUI 检测到环境缺少 Node.js、ADB 或 EMQX，允许它
-   在用户确认后通过 Homebrew 安装。
+   安装器会尝试打开对应的官方页面；不要下载第三方安装包。若 GUI 检测到环境缺少
+   Node.js、ADB 或 EMQX，允许它在用户确认后通过 Homebrew 安装。Homebrew 安装
+   失败时，以安装器打开的 Node.js、Android 或 EMQX 官方页面手动安装，再重跑
+   `bash bootstrap-macos.sh --apply`。
 4. 在 GUI 中完成以下步骤：
    - 输入 TC002 的 Wi-Fi ADB 地址（通常是 <TC002_IP>:5555）；
    - 输入用户自己在 Lark 开放平台创建的 App ID 和 App Secret（只在 GUI 输入，
