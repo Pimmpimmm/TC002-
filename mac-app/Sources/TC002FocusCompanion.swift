@@ -67,7 +67,7 @@ final class AppModel {
     var isOAuthRunning: Bool { oauthProcess?.isRunning == true }
     var isReadyToStart: Bool {
         isEnvironmentReady && isLarkVerified && isDeviceReachable
-            && !deviceIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && Self.adbTarget(deviceIP) != nil
             && !hostIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
@@ -129,16 +129,19 @@ final class AppModel {
             }
 
             if shouldCheckDevice {
-                do {
-                    let target = device.contains(":") ? device : device + ":5555"
-                    let adb = Self.adbPath()
-                    _ = try Self.run(adb, args: adb == "/usr/bin/env" ? ["adb", "connect", target] : ["connect", target])
-                    let state = try Self.run(adb, args: adb == "/usr/bin/env" ? ["adb", "-s", target, "get-state"] : ["-s", target, "get-state"])
-                    guard state.trimmingCharacters(in: .whitespacesAndNewlines) == "device" else { throw RunnerError.failed("ADB 未返回 device 状态") }
-                    deviceReachable = true
-                    messages.append("✓ TC002 自动连接检查通过")
-                } catch {
-                    messages.append("TC002 自动检查未通过：\(error.localizedDescription)")
+                if let target = Self.adbTarget(device) {
+                    do {
+                        let adb = Self.adbPath()
+                        _ = try Self.run(adb, args: adb == "/usr/bin/env" ? ["adb", "connect", target] : ["connect", target])
+                        let state = try Self.run(adb, args: adb == "/usr/bin/env" ? ["adb", "-s", target, "get-state"] : ["-s", target, "get-state"])
+                        guard state.trimmingCharacters(in: .whitespacesAndNewlines) == "device" else { throw RunnerError.failed("ADB 未返回 device 状态") }
+                        deviceReachable = true
+                        messages.append("✓ TC002 自动连接检查通过")
+                    } catch {
+                        messages.append("TC002 自动检查未通过：\(error.localizedDescription)")
+                    }
+                } else {
+                    messages.append(Self.invalidDeviceAddress)
                 }
             }
 
@@ -242,8 +245,8 @@ final class AppModel {
     func checkDevice() {
         let value = deviceIP.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { status = "请先填写时钟 IP"; notify(); return }
+        guard let target = Self.adbTarget(value) else { status = Self.invalidDeviceAddress; notify(); return }
         guard !isBusy else { return }
-        let target = value.contains(":") ? value : value + ":5555"
         isBusy = true; status = "正在测试 TC002 连接…"; notify()
         DispatchQueue.global(qos: .userInitiated).async {
             do {
@@ -311,12 +314,13 @@ final class AppModel {
     func startFocus() {
         guard let focus = Int(focusMinutes), let rest = Int(restMinutes), (1...240).contains(focus), (1...240).contains(rest) else { status = "专注和休息时长必须是 1–240 分钟的整数"; notify(); return }
         guard !deviceIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { status = "请填写时钟 IP"; notify(); return }
+        guard let device = Self.adbTarget(deviceIP) else { status = Self.invalidDeviceAddress; notify(); return }
         guard !hostIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { status = "请填写电脑 IP"; notify(); return }
         guard isAuthorized else { status = "请先完成 Lark 授权"; notify(); return }
         guard keychainValue(account: "app_id") == appID else { status = "App ID 已修改，请先重新授权 Lark"; notify(); return }
         guard FileManager.default.fileExists(atPath: repoPath + "/companion/install-macos.sh") else { status = "项目目录无效，找不到 companion/install-macos.sh"; notify(); return }
         save(); isBusy = true; status = "正在启动本机服务并连接时钟…"; appendLog("准备启动：专注 \(focus) 分钟，休息 \(rest) 分钟，设备 \(deviceIP)"); notify()
-        let focusSeconds = focus * 60; let restSeconds = rest * 60; let repo = repoPath; let device = deviceIP.contains(":") ? deviceIP : deviceIP + ":5555"; let host = hostIP; let audio = hasCustomAudio ? customAudioURL.path : nil
+        let focusSeconds = focus * 60; let restSeconds = rest * 60; let repo = repoPath; let host = hostIP; let audio = hasCustomAudio ? customAudioURL.path : nil
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 self.updateOnMain { self.status = "1/4 检查运行环境…"; self.notify() }
@@ -357,7 +361,8 @@ final class AppModel {
     func rebootDevice() {
         let value = deviceIP.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { status = "请先填写时钟 IP"; notify(); return }
-        let target = value.contains(":") ? value : value + ":5555"; isBusy = true; status = "正在重启时钟，重启后会回到原生界面…"; notify()
+        guard let target = Self.adbTarget(value) else { status = Self.invalidDeviceAddress; notify(); return }
+        isBusy = true; status = "正在重启时钟，重启后会回到原生界面…"; notify()
         DispatchQueue.global(qos: .userInitiated).async {
             do { let adb = Self.adbPath(); let args = adb == "/usr/bin/env" ? ["adb", "-s", target, "reboot"] : ["-s", target, "reboot"]; _ = try Self.run(adb, args: args); self.updateOnMain { self.isBusy = false; self.status = "已发出重启命令；设备启动后应恢复原生界面"; self.notify() } }
             catch { self.updateOnMain { self.isBusy = false; self.status = "重启失败：\(error.localizedDescription)"; self.notify() } }
@@ -499,6 +504,16 @@ final class AppModel {
         do { _ = try run(brew, args: ["--prefix", "emqx"]) }
         catch { throw EnvironmentError.missingTool(name: "EMQX", brewPackage: "emqx") }
         _ = try run("/bin/bash", args: [repo + "/companion/verify-runtime-bundle.sh"], cwd: repo)
+    }
+    private static let invalidDeviceAddress = "时钟地址只填 IPv4 或 IPv4:端口，例如 192.168.1.132:5555；不要粘贴 http:// 链接"
+    private static func adbTarget(_ input: String) -> String? {
+        let parts = input.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 1 || parts.count == 2 else { return nil }
+        let octets = parts[0].split(separator: ".", omittingEmptySubsequences: false)
+        guard octets.count == 4, octets.allSatisfy({ UInt8($0) != nil }) else { return nil }
+        let port = parts.count == 2 ? UInt16(parts[1]) : 5555
+        guard let port, port > 0 else { return nil }
+        return "\(parts[0]):\(port)"
     }
     private static func adbPath() -> String { resolvedExecutable("adb", preferred: ["/opt/homebrew/bin/adb", "/usr/local/bin/adb", "/usr/bin/adb"]) ?? "/usr/bin/env" }
     private static func nodePath() -> String { resolvedNodePath() ?? "/usr/bin/env" }

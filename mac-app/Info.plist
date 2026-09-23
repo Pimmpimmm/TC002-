@@ -18,6 +18,8 @@
 	<string>APPL</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>连接同一局域网中的 TC002 时钟，检查 Wi-Fi ADB 并发送临时专注时钟界面。</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 </dict>
