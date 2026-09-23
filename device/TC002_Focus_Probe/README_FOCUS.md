@@ -69,13 +69,22 @@ inside an x86_64 Linux VM/container when these paths are mounted:
 - official toolchain: `/toolchain`
 - downloaded FlyThings packages: `/packages`
 
+The official SSD/Z21 Linux GCC toolchain is linked from the
+[FlyThings download page](https://developer.flythings.cn/zh-hans/download.html).
+To restore the exact public dependency versions used by this project into a
+temporary package directory, run `node tools/fetch-z21-packages.mjs` on the Mac,
+then mount that directory as `/packages` (or pass its path through
+`PACKAGES_ROOT`). Do not commit the downloaded SDK packages to this repository.
+
 The default result is a temporary ADB debug bundle in `TemporaryFocusRelease`,
 with `/tmp` runtime paths and a SHA-256 manifest. Set `BUILD_DIR` and
 `DEPLOY_DIR=/mnt/extsd` explicitly only when preparing a separately reviewed
 persistent-layout bundle. The script deliberately
 includes only the two required activities and excludes the demo's audio, BLE,
 RGB and Wi-Fi test modules. It also supplies the `__PLATFORM_Z21__` define that
-the official IDE normally injects automatically.
+the official IDE normally injects automatically. `CXX`, `CXXFLAGS_EXTRA`, and
+`LDFLAGS_EXTRA` may be supplied when invoking the builder to use a compatible
+compiler wrapper or sysroot.
 
 The checked-in `TemporaryFocusRelease` is the tested deployment artifact used by
 the macOS GUI. `companion/verify-runtime-bundle.sh` validates it before any ADB

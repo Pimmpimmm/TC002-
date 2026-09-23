@@ -15,11 +15,13 @@ if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "x86_64" ]]; then
   exit 2
 fi
 
-CXX="$TOOLCHAIN_ROOT/bin/arm-linux-gnueabihf-g++"
+CXX="${CXX:-$TOOLCHAIN_ROOT/bin/arm-linux-gnueabihf-g++}"
 if [[ ! -x "$CXX" ]]; then
   echo "Official compiler not found: $CXX" >&2
   exit 2
 fi
+read -r -a CXXFLAGS_EXTRA_ARGS <<< "${CXXFLAGS_EXTRA:-}"
+read -r -a LDFLAGS_EXTRA_ARGS <<< "${LDFLAGS_EXTRA:-}"
 
 package_dir() {
   local name="$1"
@@ -109,6 +111,7 @@ for source in "${SOURCES[@]}"; do
   fi
   echo "CXX $source"
   "$CXX" \
+    "${CXXFLAGS_EXTRA_ARGS[@]}" \
     -O3 -fPIC -pipe -Wformat -Werror=format-security \
     -fstack-protector -fno-caller-saves -fexceptions -std=c++11 \
     -D__PLATFORM_Z21__=1 '-DLOG_TAG="zkgui"' \
@@ -119,6 +122,7 @@ done
 
 echo "LINK libzkgui.so"
 "$CXX" -shared -s \
+  "${LDFLAGS_EXTRA_ARGS[@]}" \
   -Wl,-z,now -Wl,-z,relro -Wl,-z,defs \
   -Wl,--warn-common -Wl,-z,combreloc -Wl,--warn-once \
   -o "$BUILD_DIR/lib/libzkgui.so" \
