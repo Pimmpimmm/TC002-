@@ -21,7 +21,9 @@ official `Z21_TC002_Demo` (GPL-3.0-or-later).
   in loop mode until the middle button is pressed. Replace that file to change
   the music without changing code.
 - While on the focus page, the left and right top buttons decrease/increase
-  volume from 0 to 6 and briefly show a native-style volume overlay.
+  volume from 0 to 6 and briefly show a native-style volume overlay. The chosen
+  level is stored in the writable runtime directory and restored after app
+  restarts.
 
 Default broker fallback: `192.0.2.100:1883` (documentation-only; use `device.conf`)
 

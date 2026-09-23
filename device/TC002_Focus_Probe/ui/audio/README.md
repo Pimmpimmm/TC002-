@@ -12,3 +12,5 @@ selected file in the user's application-support directory and passes it to
 - Playback loops until the middle button starts the next phase or rotation
   exits the cycle.
 - The top left/right buttons lower/raise volume and show a short volume overlay.
+- The selected 0..6 volume level is saved on the device and restored after the
+  temporary app restarts, so the next adjustment starts from the last level.

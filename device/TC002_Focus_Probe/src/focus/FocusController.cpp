@@ -6,6 +6,7 @@
 #include <base/base.h>
 #include <base/log.h>
 #include <chrono>
+#include <fstream>
 #include <sstream>
 #include <time.h>
 
@@ -19,6 +20,44 @@ int64_t monotonicMs() {
 	timespec value = {};
 	clock_gettime(CLOCK_MONOTONIC, &value);
 	return static_cast<int64_t>(value.tv_sec) * 1000 + value.tv_nsec / 1000000;
+}
+
+int clampVolume(int volume) {
+	if (volume < 0) return 0;
+	if (volume > 6) return 6;
+	return volume;
+}
+
+int loadVolumeLevel(int fallback) {
+	const char* paths[] = {
+		"/mnt/extsd/focus-app/volume.conf",
+		"/tmp/ui/volume.conf"
+	};
+	for (const char* path : paths) {
+		std::ifstream input(path);
+		if (!input.is_open()) continue;
+		std::string key;
+		int level = fallback;
+		if (std::getline(input, key) && key.compare(0, 13, "volume_level=") == 0) {
+			std::istringstream value(key.substr(13));
+			int parsed = -1;
+			char trailing = 0;
+			if ((value >> parsed) && !(value >> trailing) && parsed >= 0 && parsed <= 6) return parsed;
+		}
+	}
+	return clampVolume(fallback);
+}
+
+void saveVolumeLevel(int volume) {
+	const char* paths[] = {
+		"/mnt/extsd/focus-app/volume.conf",
+		"/tmp/ui/volume.conf"
+	};
+	for (const char* path : paths) {
+		std::ofstream output(path, std::ios::trunc);
+		if (!output.is_open()) continue;
+		output << "volume_level=" << clampVolume(volume) << "\n";
+	}
 }
 
 std::string makeEnvelope(const std::string& sessionId, const char* event,
@@ -39,7 +78,7 @@ FocusController::FocusController()
 	: mRunning(false), mPhase(FocusPhase::READY), mAudioCommand(AudioCommand::NONE),
 	  mStartedAt(0), mFocusDeadline(0), mPhaseDeadlineMonotonicMs(0),
 	  mFocusSeconds(focus_config::kFocusSeconds), mRestSeconds(focus_config::kRestSeconds),
-	  mVolumeLevel(focus_config::kFocusDoneAudioVolume), mVolumeOverlayUntilMs(0),
+	  mVolumeLevel(loadVolumeLevel(focus_config::kFocusDoneAudioVolume)), mVolumeOverlayUntilMs(0),
 	  mLastActionMs(0), mSessionCounter(0) {
 }
 
@@ -114,6 +153,7 @@ void FocusController::onKeyEvent(int keyCode, int keyStatus) {
 		if (mVolumeLevel < 6) ++mVolumeLevel;
 		mVolumeOverlayUntilMs = nowMs + 1500;
 		awtrix::AudioManager::getInstance().setVolume(mVolumeLevel);
+		saveVolumeLevel(mVolumeLevel);
 		LOGI_TRACE("FocusProbe: volume increased to %d", mVolumeLevel);
 		return;
 	}
@@ -121,6 +161,7 @@ void FocusController::onKeyEvent(int keyCode, int keyStatus) {
 		if (mVolumeLevel > 0) --mVolumeLevel;
 		mVolumeOverlayUntilMs = nowMs + 1500;
 		awtrix::AudioManager::getInstance().setVolume(mVolumeLevel);
+		saveVolumeLevel(mVolumeLevel);
 		LOGI_TRACE("FocusProbe: volume decreased to %d", mVolumeLevel);
 		return;
 	}
