@@ -18,6 +18,7 @@ public:
 	bool isPlaying() const;
 	//0~6 0禁音
 	void setVolume(int lv);
+	int getVolumeLevel() const;
 	void setMute(bool isMute);
 private:
 	AudioManager();

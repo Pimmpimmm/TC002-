@@ -78,7 +78,7 @@ FocusController::FocusController()
 	: mRunning(false), mPhase(FocusPhase::READY), mAudioCommand(AudioCommand::NONE),
 	  mStartedAt(0), mFocusDeadline(0), mPhaseDeadlineMonotonicMs(0),
 	  mFocusSeconds(focus_config::kFocusSeconds), mRestSeconds(focus_config::kRestSeconds),
-	  mVolumeLevel(loadVolumeLevel(focus_config::kFocusDoneAudioVolume)), mVolumeOverlayUntilMs(0),
+	  mVolumeLevel(loadVolumeLevel(awtrix::AudioManager::getInstance().getVolumeLevel())), mVolumeOverlayUntilMs(0),
 	  mLastActionMs(0), mSessionCounter(0) {
 }
 
@@ -98,6 +98,7 @@ void FocusController::start() {
 		const MqttPublisher::RuntimeConfig config = mPublisher.loadConfig();
 		mFocusSeconds = config.focusSeconds;
 		mRestSeconds = config.restSeconds;
+		awtrix::AudioManager::getInstance().setVolume(mVolumeLevel);
 		mRunning = true;
 		mWorker = std::thread(&FocusController::workerLoop, this);
 		if (focus_config::kAudioSelfTestOnBoot) {
@@ -150,6 +151,7 @@ void FocusController::onKeyEvent(int keyCode, int keyStatus) {
 	if (!isRotation && nowMs - mLastActionMs < 300) return;
 	mLastActionMs = nowMs;
 	if (keyCode == E_KEYCODE_RIGHT_BUTTON) {
+		mVolumeLevel = awtrix::AudioManager::getInstance().getVolumeLevel();
 		if (mVolumeLevel < 6) ++mVolumeLevel;
 		mVolumeOverlayUntilMs = nowMs + 1500;
 		awtrix::AudioManager::getInstance().setVolume(mVolumeLevel);
@@ -158,6 +160,7 @@ void FocusController::onKeyEvent(int keyCode, int keyStatus) {
 		return;
 	}
 	if (keyCode == E_KEYCODE_LEFT_BUTTON) {
+		mVolumeLevel = awtrix::AudioManager::getInstance().getVolumeLevel();
 		if (mVolumeLevel > 0) --mVolumeLevel;
 		mVolumeOverlayUntilMs = nowMs + 1500;
 		awtrix::AudioManager::getInstance().setVolume(mVolumeLevel);

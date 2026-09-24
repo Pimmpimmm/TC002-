@@ -55,6 +55,17 @@ void AudioManager::setVolume(int lv) {
 	}
 }
 
+int AudioManager::getVolumeLevel() const {
+	const base::AudioManager& mixer = base::AudioManager::instance();
+	if (mixer.isMute()) return 0;
+	const int volume = mixer.getVolume();
+	if (volume <= 0) return 0;
+	// setVolume() uses 15 mixer units per visible step. Round to the
+	// nearest step so a decrease starts from the volume actually in use.
+	const int level = (volume + 7) / 15;
+	return level > 6 ? 6 : level;
+}
+
 AudioManager::~AudioManager() {
 	pPlayer = nullptr;
 }
